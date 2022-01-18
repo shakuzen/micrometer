@@ -4,6 +4,8 @@ plugins {
 
 dependencies {
     api project(':micrometer-core')
+    // TODO consider whether this module should depend on micrometer-instrumentation or not
+    implementation project(':micrometer-instrumentation')
 
     implementation 'io.projectreactor:reactor-core'
     implementation('io.projectreactor.netty:reactor-netty-core') {

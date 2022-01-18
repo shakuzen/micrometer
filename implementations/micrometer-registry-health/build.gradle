@@ -1,5 +1,7 @@
 dependencies {
     api project(':micrometer-core')
+    // TODO consider whether this module should depend on micrometer-instrumentation or not
+    implementation project(':micrometer-instrumentation')
 
     implementation 'org.slf4j:slf4j-api'
 

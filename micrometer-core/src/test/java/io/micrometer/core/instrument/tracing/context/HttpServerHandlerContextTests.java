@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument.tracing.context;
 
+import io.micrometer.core.instrument.transport.http.context.HttpServerHandlerContext;
 import io.micrometer.core.instrument.transport.http.HttpServerRequest;
 import io.micrometer.core.instrument.transport.http.HttpServerResponse;
 import org.junit.jupiter.api.Test;

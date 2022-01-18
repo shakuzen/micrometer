@@ -24,6 +24,7 @@ gradleEnterprise {
 }
 
 include 'micrometer-core'
+include 'micrometer-instrumentation'
 
 ['core', 'boot2', 'boot2-reactive', 'spring-integration', 'hazelcast', 'hazelcast3', 'javalin', 'jersey3'].each { sample ->
     include "micrometer-samples-$sample"

@@ -16,8 +16,8 @@
 package io.micrometer.core.samples;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.micrometer.core.samples.utils.SampleConfig;
+import io.micrometer.instrumentation.jvm.ExecutorServiceMetrics;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;

@@ -15,10 +15,10 @@
  */
 package io.micrometer.health.objectives;
 
-import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics;
-import io.micrometer.core.instrument.binder.jvm.JvmHeapPressureMetrics;
-import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
 import io.micrometer.health.ServiceLevelObjective;
+import io.micrometer.instrumentation.jvm.JvmGcMetrics;
+import io.micrometer.instrumentation.jvm.JvmHeapPressureMetrics;
+import io.micrometer.instrumentation.jvm.JvmMemoryMetrics;
 
 import java.time.Duration;
 
