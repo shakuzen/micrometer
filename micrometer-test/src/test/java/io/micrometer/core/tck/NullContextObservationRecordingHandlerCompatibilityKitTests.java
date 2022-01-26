@@ -18,13 +18,13 @@ package io.micrometer.core.tck;
 import java.time.Duration;
 
 import io.micrometer.api.instrument.Timer;
-import io.micrometer.api.instrument.TimerRecordingHandler;
+import io.micrometer.api.instrument.ObservationHandler;
 
-class AnyHandlerContextTimerRecordingHandlerCompatibilityKitTests extends AnyHandlerContextTimerRecordingHandlerCompatibilityKit {
+class NullContextObservationRecordingHandlerCompatibilityKitTests extends NullHandlerContextObservationRecordingHandlerCompatibilityKit {
 
     @Override
-    public TimerRecordingHandler<Timer.HandlerContext> handler() {
-        return new TimerRecordingHandler<Timer.HandlerContext>() {
+    public ObservationHandler<Timer.HandlerContext> handler() {
+        return new ObservationHandler<Timer.HandlerContext>() {
             @Override
             public void onStart(Timer.Sample sample, Timer.HandlerContext handlerContext) {
 

@@ -21,7 +21,7 @@ import java.util.UUID;
 
 import io.micrometer.api.instrument.Tags;
 import io.micrometer.api.instrument.Timer;
-import io.micrometer.api.instrument.TimerRecordingHandler;
+import io.micrometer.api.instrument.ObservationHandler;
 import io.micrometer.api.lang.Nullable;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
@@ -47,7 +47,7 @@ public class TimerRecordingHandlerSample {
         System.out.println(registry.scrape());
     }
 
-    static class SampleHandler implements TimerRecordingHandler<CustomHandlerContext> {
+    static class SampleHandler implements ObservationHandler<CustomHandlerContext> {
         @Override
         public void onStart(Timer.Sample sample, @Nullable CustomHandlerContext context) {
             System.out.println("start: " + sample + " " + context);

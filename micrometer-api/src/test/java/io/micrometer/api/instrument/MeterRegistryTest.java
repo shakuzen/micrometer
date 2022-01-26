@@ -224,8 +224,8 @@ class MeterRegistryTest {
 
     @Test
     void timerRecordingHandlerShouldAddThePassedHandler() {
-        TimerRecordingHandler<?> handler1 = mock(TimerRecordingHandler.class);
-        TimerRecordingHandler<?> handler2 = mock(TimerRecordingHandler.class);
+        ObservationHandler<?> handler1 = mock(ObservationHandler.class);
+        ObservationHandler<?> handler2 = mock(ObservationHandler.class);
 
         registry.config().timerRecordingHandler(handler1);
         assertThat(registry.config().getTimerRecordingHandlers()).containsExactly(handler1);

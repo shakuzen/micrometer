@@ -18,13 +18,13 @@ package io.micrometer.core.tck;
 import java.time.Duration;
 
 import io.micrometer.api.instrument.Timer;
-import io.micrometer.api.instrument.TimerRecordingHandler;
+import io.micrometer.api.instrument.ObservationHandler;
 
-class ConcreteHandlerContextTimerRecordingHandlerCompatibilityKitTests extends ConcreteHandlerContextTimerRecordingHandlerCompatibilityKit {
+class AnyHandlerContextObservationRecordingHandlerCompatibilityKitTests extends AnyHandlerContextObservationRecordingHandlerCompatibilityKit {
 
     @Override
-    public TimerRecordingHandler<Timer.HandlerContext> handler() {
-        return new TimerRecordingHandler<Timer.HandlerContext>() {
+    public ObservationHandler<Timer.HandlerContext> handler() {
+        return new ObservationHandler<Timer.HandlerContext>() {
             @Override
             public void onStart(Timer.Sample sample, Timer.HandlerContext handlerContext) {
 
@@ -47,17 +47,8 @@ class ConcreteHandlerContextTimerRecordingHandlerCompatibilityKitTests extends C
 
             @Override
             public boolean supportsContext(Timer.HandlerContext handlerContext) {
-                return handlerContext instanceof MyHandlerContext;
+                return true;
             }
         };
-    }
-
-    @Override
-    public Timer.HandlerContext context() {
-        return new MyHandlerContext();
-    }
-
-    static class MyHandlerContext extends Timer.HandlerContext {
-
     }
 }

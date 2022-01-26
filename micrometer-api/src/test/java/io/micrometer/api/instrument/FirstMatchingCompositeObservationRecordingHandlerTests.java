@@ -17,15 +17,13 @@ package io.micrometer.api.instrument;
 
 import java.time.Duration;
 
-import io.micrometer.api.instrument.Timer;
-import io.micrometer.api.instrument.TimerRecordingHandler;
-import io.micrometer.api.instrument.TimerRecordingHandler.FirstMatchingCompositeTimerRecordingHandler;
+import io.micrometer.api.instrument.ObservationHandler.FirstMatchingCompositeObservationHandler;
 import io.micrometer.api.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class FirstMatchingCompositeTimerRecordingHandlerTests {
+class FirstMatchingCompositeObservationRecordingHandlerTests {
 
     MatchingHandler matchingHandler = new MatchingHandler();
 
@@ -33,7 +31,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
 
     @Test
     void should_run_on_start_only_for_first_matching_handler() {
-        FirstMatchingCompositeTimerRecordingHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeTimerRecordingHandler(
+        FirstMatchingCompositeObservationHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeObservationHandler(
                 new NotMatchingHandler(), this.matchingHandler, new NotMatchingHandler());
 
         firstMatchingCompositeTimerRecordingHandler.onStart(sample, null);
@@ -43,7 +41,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
 
     @Test
     void should_run_on_stop_only_for_first_matching_handler() {
-        FirstMatchingCompositeTimerRecordingHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeTimerRecordingHandler(
+        FirstMatchingCompositeObservationHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeObservationHandler(
                 new NotMatchingHandler(), this.matchingHandler, new NotMatchingHandler());
 
         firstMatchingCompositeTimerRecordingHandler.onStop(sample, null, null, null);
@@ -53,7 +51,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
 
     @Test
     void should_run_on_error_only_for_first_matching_handler() {
-        FirstMatchingCompositeTimerRecordingHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeTimerRecordingHandler(
+        FirstMatchingCompositeObservationHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeObservationHandler(
                 new NotMatchingHandler(), this.matchingHandler, new NotMatchingHandler());
 
         firstMatchingCompositeTimerRecordingHandler.onError(sample, null, new RuntimeException());
@@ -63,7 +61,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
 
     @Test
     void should_run_on_scope_opened_only_for_first_matching_handler() {
-        FirstMatchingCompositeTimerRecordingHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeTimerRecordingHandler(
+        FirstMatchingCompositeObservationHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeObservationHandler(
                 new NotMatchingHandler(), this.matchingHandler, new NotMatchingHandler());
 
         firstMatchingCompositeTimerRecordingHandler.onScopeOpened(sample, null);
@@ -73,7 +71,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
 
     @Test
     void should_run_on_scope_closed_only_for_first_matching_handler() {
-        FirstMatchingCompositeTimerRecordingHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeTimerRecordingHandler(
+        FirstMatchingCompositeObservationHandler firstMatchingCompositeTimerRecordingHandler = new FirstMatchingCompositeObservationHandler(
                 new NotMatchingHandler(), this.matchingHandler, new NotMatchingHandler());
 
         firstMatchingCompositeTimerRecordingHandler.onScopeClosed(sample, null);
@@ -81,7 +79,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
         assertThat(this.matchingHandler.scopeClosed).isTrue();
     }
 
-    static class MatchingHandler implements TimerRecordingHandler {
+    static class MatchingHandler implements ObservationHandler {
 
         boolean started;
 
@@ -125,7 +123,7 @@ class FirstMatchingCompositeTimerRecordingHandlerTests {
         }
     }
 
-    static class NotMatchingHandler implements TimerRecordingHandler {
+    static class NotMatchingHandler implements ObservationHandler {
 
         @Override
         public void onStart(Timer.Sample sample, Timer.HandlerContext context) {

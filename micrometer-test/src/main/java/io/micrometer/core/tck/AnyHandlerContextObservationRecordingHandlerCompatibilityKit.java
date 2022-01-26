@@ -18,7 +18,7 @@ package io.micrometer.core.tck;
 import java.time.Duration;
 
 import io.micrometer.api.instrument.Timer;
-import io.micrometer.api.instrument.TimerRecordingHandler;
+import io.micrometer.api.instrument.ObservationHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,14 +26,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
- * Base class for {@link TimerRecordingHandler} compatibility tests that support any context.
- * To run a {@link TimerRecordingHandler} implementation against this TCK, make a test class that extends this
+ * Base class for {@link ObservationHandler} compatibility tests that support any context.
+ * To run a {@link ObservationHandler} implementation against this TCK, make a test class that extends this
  * and implement the abstract methods.
  *
  * @author Marcin Grzejszczak
  * @since 2.0.0
  */
-public abstract class AnyHandlerContextTimerRecordingHandlerCompatibilityKit extends NullHandlerContextTimerRecordingHandlerCompatibilityKit {
+public abstract class AnyHandlerContextObservationRecordingHandlerCompatibilityKit extends NullHandlerContextObservationRecordingHandlerCompatibilityKit {
 
     @Test
     @DisplayName("compatibility test provides a test context accepting timer recording handler")

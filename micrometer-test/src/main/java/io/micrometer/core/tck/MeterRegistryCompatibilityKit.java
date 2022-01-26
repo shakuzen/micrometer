@@ -16,6 +16,7 @@
 package io.micrometer.core.tck;
 
 import io.micrometer.api.instrument.*;
+import io.micrometer.api.instrument.Observation;
 import io.micrometer.api.instrument.Timer;
 import io.micrometer.core.Issue;
 import io.micrometer.api.annotation.Timed;
@@ -627,7 +628,7 @@ public abstract class MeterRegistryCompatibilityKit {
         void recordWithSample() {
             Timer.Sample sample = Timer.start(registry);
             clock(registry).add(10, TimeUnit.NANOSECONDS);
-            sample.stop(Timer.builder("myTimer"));
+            sample.stop(Timer.builder("myTimer").register(registry));
             clock(registry).add(step());
 
             Timer timer = registry.timer("myTimer");
@@ -638,8 +639,8 @@ public abstract class MeterRegistryCompatibilityKit {
         @Test
         @DisplayName("record with stateful Sample and Scope instances")
         void recordWithSampleAndScope() {
-            Timer.Sample sample = Timer.start(registry);
-            try (Timer.Scope scope = sample.makeCurrent()) {
+            Observation sample = Observation.start(registry);
+            try (Observation.Scope scope = sample.makeCurrent()) {
                 assertThat(scope.getSample()).isSameAs(sample);
                 clock(registry).add(10, TimeUnit.NANOSECONDS);
             }
@@ -655,34 +656,34 @@ public abstract class MeterRegistryCompatibilityKit {
         @DisplayName("record using handlers")
         void recordWithHandlers() {
             @SuppressWarnings("unchecked")
-            TimerRecordingHandler<Timer.HandlerContext> handler = mock(TimerRecordingHandler.class);
+            ObservationHandler<Observation.HandlerContext> handler = mock(ObservationHandler.class);
             @SuppressWarnings("unchecked")
-            TimerRecordingHandler<Timer.HandlerContext> handlerThatHandlesNothing = mock(TimerRecordingHandler.class);
+            ObservationHandler<Observation.HandlerContext> handlerThatHandlesNothing = mock(ObservationHandler.class);
             registry.config().timerRecordingHandler(handler);
             registry.config().timerRecordingHandler(handlerThatHandlesNothing);
             when(handler.supportsContext(any())).thenReturn(true);
             when(handlerThatHandlesNothing.supportsContext(any())).thenReturn(false);
 
-            Timer.Sample sample = Timer.start(registry);
-            verify(handler).supportsContext(isA(Timer.HandlerContext.class));
-            verify(handler).onStart(same(sample), isA(Timer.HandlerContext.class));
-            verify(handlerThatHandlesNothing).supportsContext(isA(Timer.HandlerContext.class));
+            Observation sample = Observation.start(registry);
+            verify(handler).supportsContext(isA(Observation.HandlerContext.class));
+            verify(handler).onStart(same(sample), isA(Observation.HandlerContext.class));
+            verify(handlerThatHandlesNothing).supportsContext(isA(Observation.HandlerContext.class));
             verifyNoMoreInteractions(handlerThatHandlesNothing);
 
-            try (Timer.Scope scope = sample.makeCurrent()) {
-                verify(handler).onScopeOpened(same(sample), isA(Timer.HandlerContext.class));
+            try (Observation.Scope scope = sample.makeCurrent()) {
+                verify(handler).onScopeOpened(same(sample), isA(Observation.HandlerContext.class));
                 assertThat(scope.getSample()).isSameAs(sample);
 
                 clock(registry).add(10, TimeUnit.NANOSECONDS);
                 Throwable exception = new IOException("simulated");
                 sample.error(exception);
-                verify(handler).onError(same(sample), isA(Timer.HandlerContext.class), same(exception));
+                verify(handler).onError(same(sample), isA(Observation.HandlerContext.class), same(exception));
             }
-            verify(handler).onScopeClosed(same(sample), isA(Timer.HandlerContext.class));
+            verify(handler).onScopeClosed(same(sample), isA(Observation.HandlerContext.class));
             sample.stop(Timer.builder("myTimer"));
 
             Timer timer = registry.timer("myTimer");
-            verify(handler).onStop(same(sample), isA(Timer.HandlerContext.class), same(timer), eq(Duration.ofNanos(10)));
+            verify(handler).onStop(same(sample), isA(Observation.HandlerContext.class), same(timer), eq(Duration.ofNanos(10)));
             clock(registry).add(step());
 
             assertAll(() -> assertEquals(1L, timer.count()),

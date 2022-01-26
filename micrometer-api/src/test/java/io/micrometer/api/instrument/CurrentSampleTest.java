@@ -32,10 +32,10 @@ class CurrentSampleTest {
     void nestedSamples_parentChildThreadsInstrumented() throws ExecutionException, InterruptedException {
         ExecutorService taskRunner = Executors.newSingleThreadExecutor();
 
-        Timer.Sample sample = Timer.start(registry);
+        Observation sample = Observation.start(registry);
         System.out.println("Outside task: " + sample);
         assertThat(registry.getCurrentSample()).isNull();
-        try (Timer.Scope scope = sample.makeCurrent()) {
+        try (Observation.Scope scope = sample.makeCurrent()) {
             assertThat(registry.getCurrentSample()).isSameAs(sample);
             taskRunner.submit(() -> {
                 System.out.println("In task: " + registry.getCurrentSample());
@@ -50,10 +50,10 @@ class CurrentSampleTest {
     void start_thenStopOnChildThread() throws InterruptedException, ExecutionException {
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
-        Timer.Sample sample = Timer.start(registry);
+        Observation sample = Observation.start(registry);
         assertThat(registry.getCurrentSample()).isNull();
         executor.submit(() -> {
-            try (Timer.Scope scope = sample.makeCurrent()) {
+            try (Observation.Scope scope = sample.makeCurrent()) {
                 assertThat(registry.getCurrentSample()).isEqualTo(sample);
             }
             sample.stop(Timer.builder("my.timer"));
@@ -67,17 +67,17 @@ class CurrentSampleTest {
         // 2 thread pools with 1 thread each, so a different thread is used for the 2 tasks
         ExecutorService executor = Executors.newSingleThreadExecutor();
         ExecutorService executor2 = Executors.newSingleThreadExecutor();
-        Map<String, Timer.Sample> sampleMap = new HashMap<>();
+        Map<String, Observation> sampleMap = new HashMap<>();
 
         executor.submit(() -> {
-            Timer.Sample sample = Timer.start(registry);
+            Observation sample = Observation.start(registry);
             assertThat(registry.getCurrentSample()).isNull();
             sampleMap.put("mySample", sample);
         }).get();
 
         executor2.submit(() -> {
-            Timer.Sample mySample = sampleMap.get("mySample");
-            try (Timer.Scope scope = mySample.makeCurrent()) {
+            Observation mySample = sampleMap.get("mySample");
+            try (Observation.Scope scope = mySample.makeCurrent()) {
                 assertThat(registry.getCurrentSample()).isEqualTo(mySample);
             }
             mySample.stop(Timer.builder("my.timer"));
@@ -89,14 +89,14 @@ class CurrentSampleTest {
 
     @Test
     void nestedSamples_sameThread() {
-        Timer.Sample sample = Timer.start(registry);
-        Timer.Sample sample2;
+        Observation sample = Observation.start(registry);
+        Observation sample2;
         assertThat(registry.getCurrentSample()).isNull();
-        try (Timer.Scope scope = sample.makeCurrent()) {
-            sample2 = Timer.start(registry);
+        try (Observation.Scope scope = sample.makeCurrent()) {
+            sample2 = Observation.start(registry);
             assertThat(registry.getCurrentSample()).isSameAs(sample);
         }
-        try (Timer.Scope scope = sample2.makeCurrent()) {
+        try (Observation.Scope scope = sample2.makeCurrent()) {
             sample.stop(Timer.builder("test1"));
             assertThat(registry.getCurrentSample()).isSameAs(sample2);
         }

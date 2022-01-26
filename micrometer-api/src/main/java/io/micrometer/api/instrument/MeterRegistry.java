@@ -50,12 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.ToDoubleFunction;
-import java.util.function.ToLongFunction;
+import java.util.function.*;
 
 import static java.lang.String.format;
 import static java.util.Collections.emptyList;
@@ -79,13 +74,13 @@ public abstract class MeterRegistry {
     protected final Clock clock;
     private final Object meterMapLock = new Object();
     private volatile MeterFilter[] filters = new MeterFilter[0];
-    private final List<TimerRecordingHandler<?>> timerRecordingHandlers = new CopyOnWriteArrayList<>();
+    private final List<ObservationHandler<?>> observationHandlers = new CopyOnWriteArrayList<>();
     private final List<Consumer<Meter>> meterAddedListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<Meter>> meterRemovedListeners = new CopyOnWriteArrayList<>();
     private final List<BiConsumer<Meter.Id, String>> meterRegistrationFailedListeners = new CopyOnWriteArrayList<>();
     private final Config config = new Config();
     private final More more = new More();
-    private final ThreadLocal<Timer.Sample> localSample = new ThreadLocal<>();
+    private final ThreadLocal<Observation> localSample = new ThreadLocal<>();
 
     // Even though writes are guarded by meterMapLock, iterators across value space are supported
     // Hence, we use CHM to support that iteration without ConcurrentModificationException risk
@@ -120,8 +115,8 @@ public abstract class MeterRegistry {
         return localSample.get();
     }
 
-    Timer.Scope openNewScope(Timer.Sample currentSample) {
-        return new Timer.Scope(localSample, currentSample);
+    Observation.Scope openNewScope(Observation currentSample) {
+        return new Observation.Scope(localSample, currentSample);
     }
 
     /**
@@ -737,6 +732,9 @@ public abstract class MeterRegistry {
      * Access to configuration options for this registry.
      */
     public class Config {
+
+        private final ObservationConfig observationConfig;
+
         /**
          * Append a list of common tags to apply to all metrics reported to the monitoring system.
          *
@@ -809,23 +807,37 @@ public abstract class MeterRegistry {
             return this;
         }
 
-        /**
-         * Register an event handler for {@link Timer} recordings made using {@link Timer#start(MeterRegistry)}
-         * and {@link Timer.Sample#stop(Timer.Builder)} methods. You can add arbitrary behavior
-         * in the callbacks provided to get additional behavior out of timing instrumentation.
-         *
-         * @param handler handler to add to the current configuration
-         * @return This configuration instance
-         * @since 2.0.0
-         */
-        public Config timerRecordingHandler(TimerRecordingHandler<?> handler) {
-            timerRecordingHandlers.add(handler);
-            return this;
+        public ObservationConfig observation() {
+            return observationConfig;
         }
 
-        // package-private for minimal visibility
-        Collection<TimerRecordingHandler<?>> getTimerRecordingHandlers() {
-            return timerRecordingHandlers;
+        class ObservationConfig {
+            /**
+             * Register an event handler for {@link Observation} recordings made using {@link Observation#start)}
+             * and {@link Observation#stop()} methods. You can add arbitrary behavior
+             * in the callbacks provided to get additional behavior out of observation instrumentation.
+             *
+             * @param handler handler to add to the current configuration
+             * @return This configuration instance
+             * @since 2.0.0
+             */
+            public ObservationConfig observationHandler(ObservationHandler<?> handler) {
+                observationHandlers.add(handler);
+                return this;
+            }
+
+            // package-private for minimal visibility
+            Collection<ObservationHandler<?>> getObservationHandlers() {
+                return observationHandlers;
+            }
+
+            public void enabled(Predicate<String> isEnabled) {
+
+            }
+
+            boolean isEnabled(String name) {
+
+            }
         }
 
         /**
