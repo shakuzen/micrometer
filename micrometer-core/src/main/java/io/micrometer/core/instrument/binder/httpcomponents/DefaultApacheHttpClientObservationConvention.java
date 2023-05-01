@@ -37,18 +37,38 @@ import java.io.IOException;
 public class DefaultApacheHttpClientObservationConvention implements ApacheHttpClientObservationConvention {
 
     /**
-     * Singleton instance of this convention.
+     * Instance of this convention with the default name.
      */
     public static final DefaultApacheHttpClientObservationConvention INSTANCE = new DefaultApacheHttpClientObservationConvention();
+
+    private final String name;
+
+    /**
+     * A convenience static constructor. The result should be re-used rather than called
+     * many times.
+     * @param name convention name
+     * @return new default convention instance
+     */
+    static DefaultApacheHttpClientObservationConvention withName(String name) {
+        if (name.equals(MicrometerHttpRequestExecutor.DEFAULT_METER_NAME)) {
+            return INSTANCE;
+        }
+        return new DefaultApacheHttpClientObservationConvention(name);
+    }
 
     // There is no need to instantiate this class multiple times, but it may be extended,
     // hence protected visibility.
     protected DefaultApacheHttpClientObservationConvention() {
+        this(MicrometerHttpRequestExecutor.DEFAULT_METER_NAME);
+    }
+
+    protected DefaultApacheHttpClientObservationConvention(String name) {
+        this.name = name;
     }
 
     @Override
     public String getName() {
-        return MicrometerHttpRequestExecutor.METER_NAME;
+        return this.name;
     }
 
     @Override

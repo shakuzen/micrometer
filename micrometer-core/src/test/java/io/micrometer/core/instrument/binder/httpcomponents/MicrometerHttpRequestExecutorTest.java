@@ -183,7 +183,7 @@ class MicrometerHttpRequestExecutorTest {
     void overridesDefaultMeterName(@WiremockResolver.Wiremock WireMockServer server) throws IOException {
         String meterName = "http.client.requests";
         MicrometerHttpRequestExecutor executor = MicrometerHttpRequestExecutor.builder(registry)
-            .meterName(meterName)
+            .name(meterName)
             .build();
         HttpClient client = client(executor);
         EntityUtils.consume(client.execute(new HttpGet(server.baseUrl())).getEntity());
@@ -191,19 +191,49 @@ class MicrometerHttpRequestExecutorTest {
     }
 
     @Test
-    void overridesDefaultMeterNameShouldNotWorkWhenObservationRegistryIsConfigured(
+    void overridesDefaultMeterNameShouldNotWorkWhenObservationRegistryAndGlobalConventionIsConfigured(
             @WiremockResolver.Wiremock WireMockServer server) throws IOException {
         String meterName = "http.client.requests";
         ObservationRegistry observationRegistry = createObservationRegistry();
         observationRegistry.observationConfig().observationConvention(new CustomGlobalApacheHttpConvention());
         MicrometerHttpRequestExecutor executor = MicrometerHttpRequestExecutor.builder(registry)
             .observationRegistry(observationRegistry)
-            .meterName(meterName)
+            .name(meterName)
             .build();
         HttpClient client = client(executor);
         EntityUtils.consume(client.execute(new HttpGet(server.baseUrl())).getEntity());
         assertThrows(MeterNotFoundException.class, () -> registry.get(meterName).timer());
         assertThat(registry.get("custom.apache.http.client.requests")).isNotNull();
+    }
+
+    @Test
+    void overridesDefaultMeterNameShouldNotWorkWhenObservationRegistryAndLocalConventionIsConfigured(
+        @WiremockResolver.Wiremock WireMockServer server) throws IOException {
+        String meterName = "http.client.requests";
+        ObservationRegistry observationRegistry = createObservationRegistry();
+        MicrometerHttpRequestExecutor executor = MicrometerHttpRequestExecutor.builder(registry)
+            .observationRegistry(observationRegistry)
+            .observationConvention(new CustomGlobalApacheHttpConvention())
+            .name(meterName)
+            .build();
+        HttpClient client = client(executor);
+        EntityUtils.consume(client.execute(new HttpGet(server.baseUrl())).getEntity());
+        assertThrows(MeterNotFoundException.class, () -> registry.get(meterName).timer());
+        assertThat(registry.get("custom.apache.http.client.requests")).isNotNull();
+    }
+
+    @Test
+    void overridesDefaultNameShouldWorkWhenObservationRegistryIsConfiguredWithoutCustomConvention(
+        @WiremockResolver.Wiremock WireMockServer server) throws IOException {
+        String meterName = "http.client.requests";
+        ObservationRegistry observationRegistry = createObservationRegistry();
+        MicrometerHttpRequestExecutor executor = MicrometerHttpRequestExecutor.builder(registry)
+            .observationRegistry(observationRegistry)
+            .name(meterName)
+            .build();
+        HttpClient client = client(executor);
+        EntityUtils.consume(client.execute(new HttpGet(server.baseUrl())).getEntity());
+        assertThat(registry.get(meterName).timer().count()).isOne();
     }
 
     @ParameterizedTest

@@ -68,7 +68,7 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
     @Deprecated
     public static final String DEFAULT_URI_PATTERN_HEADER = DefaultUriMapper.URI_PATTERN_HEADER;
 
-    static final String METER_NAME = "httpcomponents.httpclient.request";
+    static final String DEFAULT_METER_NAME = "httpcomponents.httpclient.request";
 
     private final MeterRegistry registry;
 
@@ -85,16 +85,18 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
 
     private final boolean exportTagsForRoute;
 
+    private final DefaultApacheHttpClientObservationConvention defaultConvention;
+
     /**
      * Use {@link #builder(MeterRegistry)} to create an instance of this class.
      */
-    private MicrometerHttpRequestExecutor(int waitForContinue, MeterRegistry registry, String meterName,
+    private MicrometerHttpRequestExecutor(int waitForContinue, MeterRegistry registry, String name,
             Function<HttpRequest, String> uriMapper, Iterable<Tag> extraTags, boolean exportTagsForRoute,
             ObservationRegistry observationRegistry, @Nullable ApacheHttpClientObservationConvention convention) {
         super(waitForContinue);
         this.registry = Optional.ofNullable(registry)
             .orElseThrow(() -> new IllegalArgumentException("registry is required but has been initialized with null"));
-        this.meterName = meterName;
+        this.meterName = name;
         this.uriMapper = Optional.ofNullable(uriMapper)
             .orElseThrow(
                     () -> new IllegalArgumentException("uriMapper is required but has been initialized with null"));
@@ -102,6 +104,7 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
         this.exportTagsForRoute = exportTagsForRoute;
         this.observationRegistry = observationRegistry;
         this.convention = convention;
+        this.defaultConvention = DefaultApacheHttpClientObservationConvention.withName(name);
     }
 
     /**
@@ -120,15 +123,15 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
         ObservationOrTimerCompatibleInstrumentation<ApacheHttpClientContext> sample = ObservationOrTimerCompatibleInstrumentation
             .start(registry, observationRegistry,
                     () -> new ApacheHttpClientContext(request, context, uriMapper, exportTagsForRoute), convention,
-                    DefaultApacheHttpClientObservationConvention.INSTANCE);
+                    defaultConvention);
         String statusCodeOrError = "UNKNOWN";
         Outcome statusOutcome = Outcome.UNKNOWN;
 
         try {
             HttpResponse response = super.execute(request, conn, context);
             sample.setResponse(response);
-            statusCodeOrError = DefaultApacheHttpClientObservationConvention.INSTANCE.getStatusValue(response, null);
-            statusOutcome = DefaultApacheHttpClientObservationConvention.INSTANCE.getStatusOutcome(response);
+            statusCodeOrError = defaultConvention.getStatusValue(response, null);
+            statusOutcome = defaultConvention.getStatusOutcome(response);
             return response;
         }
         catch (IOException | HttpException | RuntimeException e) {
@@ -152,7 +155,7 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
 
         private final MeterRegistry registry;
 
-        private String requestsMeterName = MicrometerHttpRequestExecutor.METER_NAME;
+        private String name = MicrometerHttpRequestExecutor.DEFAULT_METER_NAME;
 
         private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
 
@@ -256,14 +259,16 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
         }
 
         /**
-         * Provide a name to override the default meter name
-         * @param name Meter name to use when instrumentation is done with Timer. This
-         * does not have any effect when an
-         * {@link #observationRegistry(ObservationRegistry)} is configured
+         * Provide a name to override the default. This has no effect if
+         * {@link #observationRegistry(ObservationRegistry) observationRegistry} and
+         * {@link #observationConvention(ApacheHttpClientObservationConvention)
+         * observationConvention} are configured on the builder.
+         * @param name instrumentation name (Timer/Observation name)
          * @return This builder instance
+         * @since 1.11.0
          */
-        public Builder meterName(String name) {
-            this.requestsMeterName = name;
+        public Builder name(String name) {
+            this.name = name;
             return this;
         }
 
@@ -273,7 +278,7 @@ public class MicrometerHttpRequestExecutor extends HttpRequestExecutor {
          * @return an instance of {@link MicrometerHttpRequestExecutor}
          */
         public MicrometerHttpRequestExecutor build() {
-            return new MicrometerHttpRequestExecutor(waitForContinue, registry, requestsMeterName, uriMapper, extraTags,
+            return new MicrometerHttpRequestExecutor(waitForContinue, registry, name, uriMapper, extraTags,
                     exportTagsForRoute, observationRegistry, observationConvention);
         }
 
