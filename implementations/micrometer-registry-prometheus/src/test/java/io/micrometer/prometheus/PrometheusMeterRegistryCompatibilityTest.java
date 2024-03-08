@@ -18,7 +18,7 @@ package io.micrometer.prometheus;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.MockClock;
 import io.micrometer.core.tck.MeterRegistryCompatibilityKit;
-import io.prometheus.client.CollectorRegistry;
+import io.prometheus.metrics.model.registry.PrometheusRegistry;
 
 import java.time.Duration;
 
@@ -26,7 +26,7 @@ class PrometheusMeterRegistryCompatibilityTest extends MeterRegistryCompatibilit
 
     @Override
     public MeterRegistry registry() {
-        return new PrometheusMeterRegistry(PrometheusConfig.DEFAULT, new CollectorRegistry(true), new MockClock());
+        return new PrometheusMeterRegistry(PrometheusConfig.DEFAULT, new PrometheusRegistry(), new MockClock());
     }
 
     @Override

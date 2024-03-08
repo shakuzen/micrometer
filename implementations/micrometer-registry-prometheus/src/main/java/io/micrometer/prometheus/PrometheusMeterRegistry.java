@@ -251,6 +251,12 @@ public class PrometheusMeterRegistry extends MeterRegistry {
                                 counts.add(countAtBucket.count());
                             }
 
+                            if (Double.isFinite(histogramCounts[histogramCounts.length - 1].bucket())) {
+                                // ClassicHistogramBuckets is not cumulative
+                                buckets.add(Double.POSITIVE_INFINITY);
+                                counts.add(count - histogramCounts[histogramCounts.length - 1].count());
+                            }
+
                             Exemplars exemplars = summary.histogramExemplars() != null ? Exemplars.of(summary.histogramExemplars()) : Exemplars.EMPTY;
                             families.add(
                                 new MicrometerCollector.Family<>(
