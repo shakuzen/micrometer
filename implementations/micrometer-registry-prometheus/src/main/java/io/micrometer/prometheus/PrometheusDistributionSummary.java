@@ -21,9 +21,8 @@ import io.micrometer.core.instrument.AbstractDistributionSummary;
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.distribution.*;
-import io.prometheus.client.exemplars.CounterExemplarSampler;
-import io.prometheus.client.exemplars.Exemplar;
-import io.prometheus.client.exemplars.ExemplarSampler;
+import io.prometheus.metrics.core.exemplars.ExemplarSampler;
+import io.prometheus.metrics.model.snapshots.Exemplar;
 
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.DoubleAdder;
@@ -116,14 +115,14 @@ public class PrometheusDistributionSummary extends AbstractDistributionSummary {
     }
 
     // Similar to exemplar.updateAndGet(...) but it does nothing if the next value is null
-    private void updateLastExemplar(double amount, @NonNull CounterExemplarSampler exemplarSampler) {
-        Exemplar prev;
-        Exemplar next;
-        do {
-            prev = lastExemplar.get();
-            next = exemplarSampler.sample(amount, prev);
-        }
-        while (next != null && next != prev && !lastExemplar.compareAndSet(prev, next));
+    private void updateLastExemplar(double amount, @NonNull ExemplarSampler exemplarSampler) {
+//        Exemplar prev;
+//        Exemplar next;
+//        do {
+//            prev = lastExemplar.get();
+//            next = exemplarSampler.sample(amount, prev);
+//        }
+//        while (next != null && next != prev && !lastExemplar.compareAndSet(prev, next));
     }
 
     @Nullable

@@ -1,7 +1,12 @@
 dependencies {
     api project(':micrometer-core')
 
-    api 'io.prometheus:simpleclient_common'
+    api('io.prometheus:prometheus-metrics-core:1.1.0') {
+        // TODO: this brings in half the universe figure out what is needed for exemplars
+//        exclude(group: 'io.prometheus', module: 'prometheus-metrics-tracer-initializer')
+    }
+    api 'io.prometheus:prometheus-metrics-exposition-formats:1.1.0'
+//    api 'io.prometheus:prometheus-metrics-simpleclient-bridge:1.1.0'
 
     testImplementation project(':micrometer-test')
 }
