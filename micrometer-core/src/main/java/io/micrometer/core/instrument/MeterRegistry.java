@@ -20,6 +20,7 @@ import io.micrometer.common.util.internal.logging.InternalLogger;
 import io.micrometer.common.util.internal.logging.InternalLoggerFactory;
 import io.micrometer.common.util.internal.logging.WarnThenDebugLogger;
 import io.micrometer.core.annotation.Incubating;
+import io.micrometer.core.instrument.binder.MeterConvention;
 import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.config.MeterFilterReply;
 import io.micrometer.core.instrument.config.NamingConvention;
@@ -88,6 +89,8 @@ public abstract class MeterRegistry {
     private final Object meterMapLock = new Object();
 
     private volatile MeterFilter[] filters = new MeterFilter[0];
+
+    private String conventionVariant = "default";
 
     private final List<Consumer<Meter>> meterAddedListeners = new CopyOnWriteArrayList<>();
 
@@ -876,6 +879,67 @@ public abstract class MeterRegistry {
      * Access to configuration options for this registry.
      */
     public class Config {
+
+        /**
+         * Control the instance of {@link io.micrometer.core.instrument.binder.MeterConvention convention} returned by {@link #getConvention(Class)}
+         * which can be used by instrumentation to use a different default convention when users don't explicitly provide one.
+         * @param variant label of variant to use when looking up conventions
+         * @return This configuration instance.
+         * @since 1.17.0
+         */
+        public Config conventionVariant(String variant) {
+            conventionVariant = variant;
+            return this;
+        }
+
+        /**
+         * Get the currently set {@link MeterConvention convention} variant.
+         * @return the variant
+         * @since 1.17.0
+         */
+        public String conventionVariant() {
+            return conventionVariant;
+        }
+
+        /**
+         * Register a convention that instrumentation can retrieve when users do not provide an explicit convention.
+         * @param convention
+         * @param variant
+         * @return
+         * @param <C>
+         * @param <T>
+         * @since 1.17.0
+         */
+        public <C extends @Nullable Object, T extends MeterConvention<C>> Config registerConvention(T convention, String variant) {
+            return this;
+        }
+
+        /**
+         * Get the {@link MeterConvention convention} matching the provided type and the currently set {@link #conventionVariant()}.
+         * The last one {@link #registerConvention(MeterConvention, String) registered} wins if more than one matches.
+         * @param conventionClass
+         * @return
+         * @param <C>
+         * @param <T>
+         * @since 1.17.0
+         */
+        public <C extends @Nullable Object, T extends MeterConvention<C>> @Nullable T getConvention(Class<T> conventionClass) {
+            return getConvention(conventionClass, conventionVariant());
+        }
+
+        /**
+         * Get the {@link MeterConvention convention} matching the provided type and variant.
+         * The last one {@link #registerConvention(MeterConvention, String) registered} wins if more than one matches.
+         * @param conventionClass
+         * @param variant
+         * @return matched convention, or null if none match
+         * @param <C>
+         * @param <T>
+         * @since 1.17.0
+         */
+        public <C extends @Nullable Object, T extends MeterConvention<C>> @Nullable T getConvention(Class<T> conventionClass, String variant) {
+            return null;
+        }
 
         /**
          * Append a list of common tags to apply to all metrics reported to the monitoring
