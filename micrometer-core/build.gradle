@@ -194,6 +194,7 @@ dependencies {
     testImplementation libs.ehcache3
 
     testImplementation libs.kafkaClients
+    testImplementation libs.kafkaStreams
 
     testImplementation libs.commonsPool2
 

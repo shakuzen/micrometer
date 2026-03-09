@@ -15,7 +15,13 @@
  */
 
 /**
- * Meter binders for Apache Kafka.
+ * Meter binders and Observation API support for Apache Kafka.
+ * <p>
+ * Observation support for <strong>Kafka Streams</strong> is provided via
+ * {@link io.micrometer.core.instrument.binder.kafka.ObservationKafkaClientSupplier}. Set a custom
+ * {@code KafkaClientSupplier} to {@link io.micrometer.core.instrument.binder.kafka.ObservationKafkaClientSupplier}
+ * when building the streams application (e.g. by passing this supplier to the {@code KafkaStreams} constructor
+ * that accepts a {@code KafkaClientSupplier}) so that internal producer and consumer operations are observed.
  */
 @NullMarked
 package io.micrometer.core.instrument.binder.kafka;

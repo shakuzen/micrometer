@@ -29,3 +29,28 @@ Setting up instrumentation with Apache Kafka using Kafka Streams.
 include::{include-core-test-java}/io/micrometer/core/instrument/binder/kafka/KafkaStreamsMetricsTest.java[tags=example, indent=0]
 -----
 
+[[observation-support]]
+== Observation support
+
+You can instrument Kafka Streams applications with the xref:../observation.adoc[Observation API].
+
+=== Kafka Streams
+
+Kafka Streams creates its own internal producers and consumers. Use `ObservationKafkaClientSupplier` so that every producer and consumer created by the streams engine is instrumented with observations.
+
+Pass the supplier to the `KafkaStreams` constructor that accepts a `KafkaClientSupplier`:
+
+[source,java]
+----
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.KafkaStreams;
+
+// builder is a StreamsBuilder with your topology
+Properties props = new Properties();
+props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-app");
+KafkaStreams streams = new KafkaStreams(builder.build(), props,
+        new ObservationKafkaClientSupplier(observationRegistry));
+----
+
+With the supplier in place, metrics and tracing (e.g. with Micrometer Tracing) work for Kafka Streams applications without further configuration.
