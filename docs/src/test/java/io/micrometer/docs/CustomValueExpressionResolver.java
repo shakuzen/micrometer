@@ -24,9 +24,13 @@ import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.SimpleEvaluationContext;
 
+<<<<<<<< HEAD:docs/src/test/java/io/micrometer/docs/metrics/SpelValueExpressionResolver.java
 class SpelValueExpressionResolver implements ValueExpressionResolver {
+========
+public class CustomValueExpressionResolver implements ValueExpressionResolver {
+>>>>>>>> a2152dd5b (Clarify custom MeterTag value expression resolver docs):docs/src/test/java/io/micrometer/docs/CustomValueExpressionResolver.java
 
-    private static final InternalLogger log = InternalLoggerFactory.getInstance(SpelValueExpressionResolver.class);
+    private static final InternalLogger log = InternalLoggerFactory.getInstance(CustomValueExpressionResolver.class);
 
     @Override
     public String resolve(String expression, Object parameter) {

@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.docs.CustomValueExpressionResolver;
 import io.micrometer.observation.*;
 import io.micrometer.observation.annotation.Observed;
 import io.micrometer.observation.aop.ObservedAspect;
@@ -214,6 +215,46 @@ class ObservationHandlerTests {
                 .hasLowCardinalityKeyValue("class", ObservedService.class.getName())
                 .hasLowCardinalityKeyValue("method", "call").doesNotHaveError();
         // end::observed_aop[]
+        // @formatter:on
+    }
+
+    @Test
+    void annotatedCallShouldBeObservedWithParameter() {
+        // @formatter:off
+        // tag::observed_aop_with_parameter[]
+        // create a test registry
+        TestObservationRegistry registry = TestObservationRegistry.create();
+        // add a system out printing handler
+        registry.observationConfig().observationHandler(new ObservationTextPublisher());
+
+        // create a proxy around the observed service
+        AspectJProxyFactory pf = new AspectJProxyFactory(new ObservedServiceWithParameter());
+        ObservedAspect observedAspect = new ObservedAspect(registry);
+        ValueResolver valueResolver = parameter -> "Value from myCustomValueResolver [" + parameter + "]";
+        ValueExpressionResolver valueExpressionResolver = new CustomValueExpressionResolver();
+        observedAspect.setObservationKeyValueAnnotationHandler(
+            new ObservationKeyValueAnnotationHandler(
+                aClass -> valueResolver, aClass -> valueExpressionResolver)
+        );
+
+        pf.addAspect(observedAspect);
+
+        // make a call
+        ObservedServiceWithParameter service = pf.getProxy();
+        service.call("foo");
+
+        // assert that observation has been properly created
+        assertThat(registry)
+                .hasSingleObservationThat()
+                .hasBeenStopped()
+                .hasNameEqualTo("test.call")
+                .hasHighCardinalityKeyValue("key0", "foo")
+                .hasHighCardinalityKeyValue("key1", "foo")
+                .hasHighCardinalityKeyValue("key2", "key2: FOO")
+                .hasHighCardinalityKeyValue("key3", "Value from myCustomValueResolver [foo]")
+                .hasLowCardinalityKeyValue("key4", "foo")
+                .doesNotHaveError();
+        // end::observed_aop_with_parameter[]
         // @formatter:on
     }
 
