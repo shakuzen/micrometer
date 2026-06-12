@@ -100,6 +100,17 @@ class MicrometerHttpClientInterceptorTest {
         client.close();
     }
 
+    @Test
+    void responseInterceptorDoesNotThrowNpeIfRequestInterceptorNeverRan() throws Exception {
+        MicrometerHttpClientInterceptor interceptor = new MicrometerHttpClientInterceptor(registry, Tags.empty(), true);
+        org.apache.hc.core5.http.protocol.HttpContext context = new org.apache.hc.core5.http.protocol.BasicHttpContext();
+        org.apache.hc.core5.http.HttpResponse response = new org.apache.hc.core5.http.message.BasicHttpResponse(200, "OK");
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
+            interceptor.getResponseInterceptor().process(response, null, context);
+        });
+    }
+
     private CloseableHttpAsyncClient asyncClient() {
         MicrometerHttpClientInterceptor interceptor = new MicrometerHttpClientInterceptor(registry,
                 HttpRequest::getRequestUri, Tags.empty(), true);
