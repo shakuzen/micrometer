@@ -15,16 +15,14 @@
  */
 package io.micrometer.concurrencytests;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.LongTaskTimer.Sample;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import org.openjdk.jcstress.annotations.Actor;
-import org.openjdk.jcstress.annotations.JCStressTest;
-import org.openjdk.jcstress.annotations.Outcome;
-import org.openjdk.jcstress.annotations.State;
+import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.Z_Result;
 
 import java.time.Duration;
@@ -33,7 +31,7 @@ import static org.openjdk.jcstress.annotations.Expect.ACCEPTABLE;
 import static org.openjdk.jcstress.annotations.Expect.FORBIDDEN;
 
 /**
- * Concurrency tests for histogram using {@link PrometheusMeterRegistry}.
+ * Concurrency tests for {@link PrometheusMeterRegistry}.
  */
 public class PrometheusMeterRegistryConcurrencyTest {
 
@@ -123,6 +121,46 @@ public class PrometheusMeterRegistryConcurrencyTest {
             }
         }
 
+    }
+
+    /*
+     * Concurrent register and remove on the same meter name in PrometheusMeterRegistry.
+     * Thread 1 removes an existing counter, Thread 2 registers a new counter with the same name.
+     * We want to verify that Thread 2's registration is not lost or overwritten by Thread 1's removal.
+     */
+    @JCStressTest
+    @State
+    @Outcome(id = "true", expect = ACCEPTABLE, desc = "Scrape successfully includes the counter")
+    @Outcome(id = "false", expect = FORBIDDEN, desc = "Scrape missed the registered counter")
+    public static class ConcurrentRegisterAndRemove {
+
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+        Counter c1;
+
+        public ConcurrentRegisterAndRemove() {
+            // Initial registration
+            c1 = registry.counter("test_counter", "tag", "1");
+        }
+
+        @Actor
+        public void remove() {
+            registry.remove(c1);
+        }
+
+        @Actor
+        public void register() {
+            registry.counter("test_counter", "tag", "2");
+        }
+
+        @Arbiter
+        public void check(Z_Result r) {
+            // After both operations complete:
+            // If the register actor ran and was not lost, the scrape string should contain the "test_counter"
+            // specifically for tag="2", even if tag="1" was successfully removed.
+            String scrape = registry.scrape();
+            r.r1 = scrape.contains("test_counter_total{tag=\"2\"}");
+        }
     }
 
 }

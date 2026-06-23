@@ -555,14 +555,16 @@ public class PrometheusMeterRegistry extends MeterRegistry {
     }
 
     private void onMeterRemoved(Meter meter) {
-        MicrometerCollector collector = collectorMap.get(getConventionName(meter.getId()));
-        if (collector != null) {
-            collector.remove(tagValues(meter.getId()));
-            if (collector.isEmpty()) {
-                collectorMap.remove(getConventionName(meter.getId()));
-                getPrometheusRegistry().unregister(collector);
+        collectorMap.compute(getConventionName(meter.getId()), (name, existingCollector) -> {
+            if (existingCollector != null) {
+                existingCollector.remove(tagValues(meter.getId()));
+                if (existingCollector.isEmpty()) {
+                    getPrometheusRegistry().unregister(existingCollector);
+                    return null;
+                }
             }
-        }
+            return existingCollector;
+        });
     }
 
     private MetricMetadata getMetadata(String name, @Nullable String description) {
