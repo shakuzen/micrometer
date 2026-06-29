@@ -168,7 +168,8 @@ class TelegrafStatsdLineBuilderIntegrationTest {
     }
 
     private boolean clientIsDisposed(StatsdMeterRegistry meterRegistry) {
-        return meterRegistry.statsdConnection.get().isDisposed();
+        reactor.core.Disposable connection = meterRegistry.statsdConnection.get();
+        return connection == null || connection.isDisposed();
     }
 
     private StatsdConfig getStatsdConfig() {
