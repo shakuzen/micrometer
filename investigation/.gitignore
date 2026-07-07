@@ -1,0 +1,7 @@
+libs-old/
+libs-new/
+libs-main/
+**/out-old/
+**/out-new/
+**/out-main/
+**/out-probe/
