@@ -16,6 +16,8 @@
 package io.micrometer.core.instrument;
 
 import com.sun.management.ThreadMXBean;
+import io.micrometer.common.KeyValue;
+import io.micrometer.common.KeyValues;
 import io.micrometer.core.Issue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.*;
@@ -375,6 +377,32 @@ class TagsTest {
 
         assertThat(of).isEqualTo(Tags.empty());
         assertThat(allocatedBytes).isEqualTo(0);
+    }
+
+    @Test
+    void ofIterableKeyValues() {
+        Tags tags = Tags.of(KeyValues.of("t1", "v1", "t2", "v2"));
+        assertTags(tags, "t1", "v1", "t2", "v2");
+        assertThat(tags).isEqualTo(Tags.of("t1", "v1", "t2", "v2"));
+    }
+
+    @Test
+    void ofIterableKeyValuesShouldUseTagElementsAsIs() {
+        Tag tag = Tag.of("t1", "v1");
+        List<KeyValue> keyValues = Arrays.asList(tag, KeyValue.of("t2", "v2"));
+        Tags tags = Tags.of(keyValues);
+        assertTags(tags, "t1", "v1", "t2", "v2");
+        assertThat(tags.iterator().next()).isSameAs(tag);
+    }
+
+    @Test
+    void andIterableKeyValues() {
+        assertTags(Tags.of("t1", "v1").and(KeyValues.of("t2", "v2")), "t1", "v1", "t2", "v2");
+    }
+
+    @Test
+    void concatIterableKeyValues() {
+        assertTags(Tags.concat(KeyValues.of("t1", "v1"), KeyValues.of("t2", "v2")), "t1", "v1", "t2", "v2");
     }
 
     private void assertTags(Tags tags, String... keyValues) {

@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.common.lang.internal.Contract;
 import io.micrometer.common.util.internal.logging.InternalLogger;
 import io.micrometer.common.util.internal.logging.InternalLoggerFactory;
@@ -457,12 +458,13 @@ public abstract class MeterRegistry {
     }
 
     /**
-     * Tracks a monotonically increasing value.
+     * Tracks a monotonically increasing value. As of 1.18.0, the elements may be any
+     * {@link KeyValue}s, for example {@link io.micrometer.common.KeyValues}.
      * @param name The base metric name
      * @param tags Sequence of dimensions for breaking down the name.
      * @return A new or existing counter.
      */
-    public Counter counter(String name, Iterable<Tag> tags) {
+    public Counter counter(String name, Iterable<? extends KeyValue> tags) {
         return counter(name, Tags.of(tags));
     }
 
@@ -489,12 +491,13 @@ public abstract class MeterRegistry {
     }
 
     /**
-     * Measures the distribution of samples.
+     * Measures the distribution of samples. As of 1.18.0, the elements may be any
+     * {@link KeyValue}s, for example {@link io.micrometer.common.KeyValues}.
      * @param name The base metric name
      * @param tags Sequence of dimensions for breaking down the name.
      * @return A new or existing distribution summary.
      */
-    public DistributionSummary summary(String name, Iterable<Tag> tags) {
+    public DistributionSummary summary(String name, Iterable<? extends KeyValue> tags) {
         return DistributionSummary.builder(name).tags(tags).register(this);
     }
 
@@ -510,12 +513,14 @@ public abstract class MeterRegistry {
     }
 
     /**
-     * Measures the time taken for short tasks and the count of these tasks.
+     * Measures the time taken for short tasks and the count of these tasks. As of 1.18.0,
+     * the elements may be any {@link KeyValue}s, for example
+     * {@link io.micrometer.common.KeyValues}.
      * @param name The base metric name
      * @param tags Sequence of dimensions for breaking down the name.
      * @return A new or existing timer.
      */
-    public Timer timer(String name, Iterable<Tag> tags) {
+    public Timer timer(String name, Iterable<? extends KeyValue> tags) {
         return timer(name, Tags.of(tags));
     }
 
@@ -1095,12 +1100,13 @@ public abstract class MeterRegistry {
         }
 
         /**
-         * Measures the time taken for long tasks.
+         * Measures the time taken for long tasks. As of 1.18.0, the elements may be any
+         * {@link KeyValue}s, for example {@link io.micrometer.common.KeyValues}.
          * @param name Name of the long task timer being registered.
          * @param tags Sequence of dimensions for breaking down the name.
          * @return A new or existing long task timer.
          */
-        public LongTaskTimer longTaskTimer(String name, Iterable<Tag> tags) {
+        public LongTaskTimer longTaskTimer(String name, Iterable<? extends KeyValue> tags) {
             return longTaskTimer(name, Tags.of(tags));
         }
 

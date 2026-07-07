@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.core.instrument.distribution.pause.PauseDetector;
 import org.jspecify.annotations.Nullable;
@@ -75,7 +76,7 @@ public abstract class AbstractTimerBuilder<B extends AbstractTimerBuilder<B>> {
      * @param tags Tags to add to the eventual timer.
      * @return The timer builder with added tags.
      */
-    public B tags(Iterable<Tag> tags) {
+    public B tags(Iterable<? extends KeyValue> tags) {
         this.tags = this.tags.and(tags);
         return (B) this;
     }

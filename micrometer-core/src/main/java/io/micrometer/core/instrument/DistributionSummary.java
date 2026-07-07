@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.instrument.distribution.CountAtBucket;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.core.instrument.distribution.HistogramSupport;
@@ -144,7 +145,7 @@ public interface DistributionSummary extends Meter, HistogramSupport {
          * @param tags Tags to add to the eventual distribution summary.
          * @return The distribution summary builder with added tags.
          */
-        public Builder tags(Iterable<Tag> tags) {
+        public Builder tags(Iterable<? extends KeyValue> tags) {
             this.tags = this.tags.and(tags);
             return this;
         }

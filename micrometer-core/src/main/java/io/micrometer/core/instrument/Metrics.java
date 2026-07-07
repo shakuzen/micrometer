@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
 
 import java.util.Collection;
@@ -60,7 +61,7 @@ public class Metrics {
      * @param tags Sequence of dimensions for breaking down the name.
      * @return A new or existing counter.
      */
-    public static Counter counter(String name, Iterable<Tag> tags) {
+    public static Counter counter(String name, Iterable<? extends KeyValue> tags) {
         return globalRegistry.counter(name, tags);
     }
 
@@ -81,7 +82,7 @@ public class Metrics {
      * @param tags Sequence of dimensions for breaking down the name.
      * @return A new or existing distribution summary.
      */
-    public static DistributionSummary summary(String name, Iterable<Tag> tags) {
+    public static DistributionSummary summary(String name, Iterable<? extends KeyValue> tags) {
         return globalRegistry.summary(name, tags);
     }
 
@@ -102,7 +103,7 @@ public class Metrics {
      * @param tags Sequence of dimensions for breaking down the name.
      * @return A new or existing timer.
      */
-    public static Timer timer(String name, Iterable<Tag> tags) {
+    public static Timer timer(String name, Iterable<? extends KeyValue> tags) {
         return globalRegistry.timer(name, tags);
     }
 
@@ -245,7 +246,7 @@ public class Metrics {
          * @param tags Sequence of dimensions for breaking down the name.
          * @return A new or existing long task timer.
          */
-        public LongTaskTimer longTaskTimer(String name, Iterable<Tag> tags) {
+        public LongTaskTimer longTaskTimer(String name, Iterable<? extends KeyValue> tags) {
             return globalRegistry.more().longTaskTimer(name, tags);
         }
 

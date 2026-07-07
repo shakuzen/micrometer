@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.annotation.Incubating;
 import io.micrometer.core.instrument.config.NamingConvention;
 import io.micrometer.core.instrument.distribution.HistogramGauges;
@@ -429,7 +430,7 @@ public interface Meter {
          * @param tags Tags to add to the eventual meter.
          * @return The custom meter builder with added tags.
          */
-        public Builder tags(Iterable<Tag> tags) {
+        public Builder tags(Iterable<? extends KeyValue> tags) {
             this.tags = this.tags.and(tags);
             return this;
         }

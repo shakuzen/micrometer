@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.annotation.Incubating;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.distribution.CountAtBucket;
@@ -369,7 +370,7 @@ public interface Timer extends Meter, HistogramSupport {
         }
 
         @Override
-        public Builder tags(Iterable<Tag> tags) {
+        public Builder tags(Iterable<? extends KeyValue> tags) {
             return super.tags(tags);
         }
 

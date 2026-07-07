@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.annotation.Incubating;
 import io.micrometer.core.instrument.distribution.HistogramGauges;
 import org.jspecify.annotations.Nullable;
@@ -114,7 +115,7 @@ public interface Gauge extends Meter {
          * @param tags Tags to add to the eventual gauge.
          * @return The gauge builder with added tags.
          */
-        public Builder<T> tags(Iterable<Tag> tags) {
+        public Builder<T> tags(Iterable<? extends KeyValue> tags) {
             this.tags = this.tags.and(tags);
             return this;
         }

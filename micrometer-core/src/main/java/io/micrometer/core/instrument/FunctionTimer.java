@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Arrays;
@@ -111,7 +112,7 @@ public interface FunctionTimer extends Meter {
          * @param tags Tags to add to the eventual function timer.
          * @return The function timer builder with added tags.
          */
-        public Builder<T> tags(Iterable<Tag> tags) {
+        public Builder<T> tags(Iterable<? extends KeyValue> tags) {
             this.tags = this.tags.and(tags);
             return this;
         }

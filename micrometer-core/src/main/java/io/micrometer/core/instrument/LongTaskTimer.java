@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.core.instrument.distribution.HistogramSupport;
@@ -322,7 +323,7 @@ public interface LongTaskTimer extends Meter, HistogramSupport {
          * @param tags Tags to add to the eventual long task timer.
          * @return The long task timer builder with added tags.
          */
-        public Builder tags(Iterable<Tag> tags) {
+        public Builder tags(Iterable<? extends KeyValue> tags) {
             this.tags = this.tags.and(tags);
             return this;
         }

@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import io.micrometer.common.lang.internal.Contract;
 import org.jspecify.annotations.Nullable;
 
@@ -211,11 +212,12 @@ public final class Tags implements Iterable<Tag> {
 
     /**
      * Return a new {@code Tags} instance by merging this collection and the specified
-     * tags.
+     * tags. As of 1.18.0, the elements may be any {@link KeyValue}s; {@link Tag} elements
+     * are used as-is, other {@link KeyValue} elements are converted to {@link Tag}s.
      * @param tags the tags to add, elements mustn't be null
      * @return a new {@code Tags} instance
      */
-    public Tags and(@Nullable Iterable<? extends Tag> tags) {
+    public Tags and(@Nullable Iterable<? extends KeyValue> tags) {
         if (tags == null || tags == EMPTY || !tags.iterator().hasNext()) {
             return this;
         }
@@ -306,33 +308,39 @@ public final class Tags implements Iterable<Tag> {
 
     /**
      * Return a new {@code Tags} instance by concatenating the specified collections of
-     * tags.
+     * tags. As of 1.18.0, the elements may be any {@link KeyValue}s; {@link Tag} elements
+     * are used as-is, other {@link KeyValue} elements are converted to {@link Tag}s.
      * @param tags the first set of tags, elements mustn't be null
      * @param otherTags the second set of tags, elements mustn't be null
      * @return the merged tags
      */
-    public static Tags concat(@Nullable Iterable<? extends Tag> tags, @Nullable Iterable<? extends Tag> otherTags) {
+    public static Tags concat(@Nullable Iterable<? extends KeyValue> tags,
+            @Nullable Iterable<? extends KeyValue> otherTags) {
         return Tags.of(tags).and(otherTags);
     }
 
     /**
      * Return a new {@code Tags} instance by concatenating the specified tags and
-     * key/value pairs.
+     * key/value pairs. As of 1.18.0, the elements may be any {@link KeyValue}s;
+     * {@link Tag} elements are used as-is, other {@link KeyValue} elements are converted
+     * to {@link Tag}s.
      * @param tags the first set of tags, elements mustn't be null
      * @param keyValues the additional key/value pairs to add, elements mustn't be null
      * @return the merged tags
      */
-    public static Tags concat(@Nullable Iterable<? extends Tag> tags, String @Nullable ... keyValues) {
+    public static Tags concat(@Nullable Iterable<? extends KeyValue> tags, String @Nullable ... keyValues) {
         return Tags.of(tags).and(keyValues);
     }
 
     /**
      * Return a new {@code Tags} instance containing tags constructed from the specified
-     * source tags.
+     * source tags. As of 1.18.0, the elements may be any {@link KeyValue}s; {@link Tag}
+     * elements are used as-is, other {@link KeyValue} elements are converted to
+     * {@link Tag}s.
      * @param tags the tags to add, elements mustn't be null
      * @return a new {@code Tags} instance
      */
-    public static Tags of(@Nullable Iterable<? extends Tag> tags) {
+    public static Tags of(@Nullable Iterable<? extends KeyValue> tags) {
         if (tags == null || tags == EMPTY || !tags.iterator().hasNext()) {
             return Tags.empty();
         }
@@ -340,12 +348,30 @@ public final class Tags implements Iterable<Tag> {
             return (Tags) tags;
         }
         else if (tags instanceof Collection) {
-            Collection<? extends Tag> tagsCollection = (Collection<? extends Tag>) tags;
-            return toTags(tagsCollection.toArray(EMPTY_TAG_ARRAY));
+            Collection<? extends KeyValue> tagsCollection = (Collection<? extends KeyValue>) tags;
+            Tag[] tagsArray = new Tag[tagsCollection.size()];
+            int i = 0;
+            for (KeyValue keyValue : tagsCollection) {
+                if (i == tagsArray.length) {
+                    // only reachable if the collection was concurrently grown
+                    tagsArray = Arrays.copyOf(tagsArray, i + 2);
+                }
+                tagsArray[i++] = toTag(keyValue);
+            }
+            return toTags(i == tagsArray.length ? tagsArray : Arrays.copyOf(tagsArray, i));
         }
         else {
-            return toTags(StreamSupport.stream(tags.spliterator(), false).toArray(Tag[]::new));
+            return toTags(StreamSupport.stream(tags.spliterator(), false).map(Tags::toTag).toArray(Tag[]::new));
         }
+    }
+
+    /**
+     * Return the given {@link KeyValue} as a {@link Tag}, converting it if necessary.
+     * @param keyValue the key value to convert
+     * @return a {@code Tag} with the same key and value
+     */
+    private static Tag toTag(KeyValue keyValue) {
+        return keyValue instanceof Tag ? (Tag) keyValue : Tag.of(keyValue.getKey(), keyValue.getValue());
     }
 
     /**
