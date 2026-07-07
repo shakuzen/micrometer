@@ -16,18 +16,19 @@
 package io.micrometer.core.instrument;
 
 import io.micrometer.common.KeyValue;
+import io.micrometer.common.KeyValues;
 import io.micrometer.core.annotation.Incubating;
 import io.micrometer.core.instrument.config.NamingConvention;
 import io.micrometer.core.instrument.distribution.HistogramGauges;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static java.util.Collections.singletonList;
 
@@ -183,9 +184,28 @@ public interface Meter {
      */
     class Id {
 
+        private static final KeyValue[] EMPTY_KEY_VALUE_ARRAY = new KeyValue[0];
+
         private final String name;
 
-        private final Tags tags;
+        /**
+         * The key values identifying this meter together with {@link #name}, sorted by
+         * key and deduplicated. Only the first {@link #count} elements are valid. May be
+         * a covariant {@code Tag[]} shared with a {@link Tags} instance; the array is
+         * never written to.
+         */
+        private final KeyValue[] keyValues;
+
+        private final int count;
+
+        /**
+         * Lazily computed {@link Tags} view of {@link #keyValues}, cached on first use.
+         * Populated eagerly when this id was created from a {@link Tags} instance.
+         * Intentionally not volatile: the reference is immutable and any concurrently
+         * computed values are equal, so this is a benign data race (like
+         * {@code String.hash}).
+         */
+        private @Nullable Tags tags;
 
         private final Type type;
 
@@ -195,10 +215,11 @@ public interface Meter {
 
         private final @Nullable String baseUnit;
 
-        @Incubating(since = "1.1.0")
-        Id(String name, Tags tags, @Nullable String baseUnit, @Nullable String description, Type type,
-                Meter.@Nullable Id syntheticAssociation) {
+        private Id(String name, KeyValue[] keyValues, int count, @Nullable Tags tags, @Nullable String baseUnit,
+                @Nullable String description, Type type, Meter.@Nullable Id syntheticAssociation) {
             this.name = name;
+            this.keyValues = keyValues;
+            this.count = count;
             this.tags = tags;
             this.baseUnit = baseUnit;
             this.description = description;
@@ -206,8 +227,62 @@ public interface Meter {
             this.syntheticAssociation = syntheticAssociation;
         }
 
+        @Incubating(since = "1.1.0")
+        Id(String name, Tags tags, @Nullable String baseUnit, @Nullable String description, Type type,
+                Meter.@Nullable Id syntheticAssociation) {
+            this(name, tags.sortedSetUnsafe(), tags.size(), tags, baseUnit, description, type, syntheticAssociation);
+        }
+
         public Id(String name, Tags tags, @Nullable String baseUnit, @Nullable String description, Type type) {
             this(name, tags, baseUnit, description, type, null);
+        }
+
+        /**
+         * Create an id from key values without materializing a {@link Tags} instance; the
+         * {@link Tags} view is computed lazily if a tag-typed accessor is called. Only
+         * used internally.
+         * @param name name of the meter
+         * @param keyValues key values of the meter
+         * @param baseUnit base unit of the meter
+         * @param description description of the meter
+         * @param type type of the meter
+         * @return a new id
+         */
+        static Id of(String name, Iterable<? extends KeyValue> keyValues, @Nullable String baseUnit,
+                @Nullable String description, Type type) {
+            if (keyValues instanceof Tags) {
+                return new Id(name, (Tags) keyValues, baseUnit, description, type);
+            }
+            KeyValue[] sortedKeyValues = toSortedKeyValueArray(keyValues);
+            return new Id(name, sortedKeyValues, sortedKeyValues.length, null, baseUnit, description, type, null);
+        }
+
+        private static KeyValue[] toSortedKeyValueArray(Iterable<? extends KeyValue> keyValues) {
+            // KeyValues.of returns the same instance if the input is already a KeyValues
+            KeyValues sorted = KeyValues.of(keyValues);
+            // the spliterator is array-based and reports an exact size
+            int size = (int) sorted.spliterator().estimateSize();
+            if (size == 0) {
+                return EMPTY_KEY_VALUE_ARRAY;
+            }
+            KeyValue[] array = new KeyValue[size];
+            int i = 0;
+            for (KeyValue keyValue : sorted) {
+                array[i++] = keyValue;
+            }
+            return array;
+        }
+
+        /**
+         * Return the (lazily computed) {@link Tags} view of this id's key values.
+         */
+        private Tags tagsView() {
+            Tags tags = this.tags;
+            if (tags == null) {
+                tags = Tags.fromSortedKeyValues(keyValues, count);
+                this.tags = tags;
+            }
+            return tags;
         }
 
         /**
@@ -216,7 +291,7 @@ public interface Meter {
          * @return A new id with the provided name. The source id remains unchanged.
          */
         public Id withName(String newName) {
-            return new Id(newName, tags, baseUnit, description, type);
+            return new Id(newName, keyValues, count, tags, baseUnit, description, type, null);
         }
 
         /**
@@ -237,7 +312,7 @@ public interface Meter {
          * @since 1.1.0
          */
         public Id withTags(Iterable<Tag> tags) {
-            return new Id(name, this.tags.and(tags), baseUnit, description, type);
+            return new Id(name, tagsView().and(tags), baseUnit, description, type);
         }
 
         /**
@@ -266,7 +341,7 @@ public interface Meter {
          * @return A new id with the provided base unit.
          */
         public Id withBaseUnit(@Nullable String newBaseUnit) {
-            return new Id(name, tags, newBaseUnit, description, type);
+            return new Id(name, keyValues, count, tags, newBaseUnit, description, type, null);
         }
 
         /**
@@ -280,19 +355,20 @@ public interface Meter {
          * @return A set of dimensions that allows you to break down the name.
          */
         public List<Tag> getTags() {
-            if (this.tags == Tags.empty()) {
+            if (count == 0) {
                 return Collections.emptyList();
             }
 
-            List<Tag> list = new ArrayList<>(this.tags.size());
-            for (Tag tag : this.tags) {
+            Tags tags = tagsView();
+            List<Tag> list = new ArrayList<>(tags.size());
+            for (Tag tag : tags) {
                 list.add(tag);
             }
             return Collections.unmodifiableList(list);
         }
 
         public Iterable<Tag> getTagsAsIterable() {
-            return tags;
+            return tagsView();
         }
 
         /**
@@ -301,9 +377,10 @@ public interface Meter {
          * exists on this id.
          */
         public @Nullable String getTag(String key) {
-            for (Tag tag : tags) {
-                if (tag.getKey().equals(key))
-                    return tag.getValue();
+            for (int i = 0; i < count; i++) {
+                KeyValue keyValue = keyValues[i];
+                if (keyValue.getKey().equals(key))
+                    return keyValue.getValue();
             }
             return null;
         }
@@ -331,7 +408,7 @@ public interface Meter {
          * system's expectations.
          */
         public List<Tag> getConventionTags(NamingConvention namingConvention) {
-            return StreamSupport.stream(tags.spliterator(), false)
+            return Arrays.stream(keyValues, 0, count)
                 .map(t -> Tag.of(namingConvention.tagKey(t.getKey()), namingConvention.tagValue(t.getValue())))
                 .collect(Collectors.toList());
         }
@@ -346,7 +423,7 @@ public interface Meter {
 
         @Override
         public String toString() {
-            return "MeterId{" + "name='" + name + '\'' + ", tags=" + tags + '}';
+            return "MeterId{" + "name='" + name + '\'' + ", tags=" + tagsView() + '}';
         }
 
         @Override
@@ -356,13 +433,25 @@ public interface Meter {
             if (!(o instanceof Id))
                 return false;
             Meter.Id meterId = (Meter.Id) o;
-            return name.equals(meterId.name) && tags.equals(meterId.tags);
+            if (!name.equals(meterId.name) || count != meterId.count)
+                return false;
+            if (keyValues == meterId.keyValues)
+                return true;
+            for (int i = 0; i < count; i++) {
+                if (!keyValues[i].equals(meterId.keyValues[i]))
+                    return false;
+            }
+            return true;
         }
 
         @Override
         public int hashCode() {
             int result = name.hashCode();
-            result = 31 * result + tags.hashCode();
+            int keyValuesHash = 1;
+            for (int i = 0; i < count; i++) {
+                keyValuesHash = 31 * keyValuesHash + keyValues[i].hashCode();
+            }
+            result = 31 * result + keyValuesHash;
             return result;
         }
 

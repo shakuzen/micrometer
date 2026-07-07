@@ -237,6 +237,35 @@ public final class Tags implements Iterable<Tag> {
         return length;
     }
 
+    /**
+     * Non-public method to share the internal array without copying, e.g. with
+     * {@link Meter.Id}. Only the first {@link #size()} elements are valid. Callers must
+     * never write to the returned array.
+     * @return the internal sorted and deduplicated array backing this instance
+     */
+    Tag[] sortedSetUnsafe() {
+        return sortedSet;
+    }
+
+    /**
+     * Non-public method to create a {@code Tags} instance from an array of
+     * {@link KeyValue}s that is already sorted by key and deduplicated, e.g. the internal
+     * state of a {@link Meter.Id}. The array is not written to.
+     * @param sortedKeyValues an ordered set of unique key values by key
+     * @param length the number of valid elements in {@code sortedKeyValues}
+     * @return a {@code Tags} instance with equal key/value pairs
+     */
+    static Tags fromSortedKeyValues(KeyValue[] sortedKeyValues, int length) {
+        if (length == 0) {
+            return EMPTY;
+        }
+        Tag[] tags = new Tag[length];
+        for (int i = 0; i < length; i++) {
+            tags[i] = toTag(sortedKeyValues[i]);
+        }
+        return new Tags(tags, length);
+    }
+
     @Override
     public Iterator<Tag> iterator() {
         return new ArrayIterator();

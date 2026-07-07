@@ -16,12 +16,11 @@
 package io.micrometer.core.instrument.observation;
 
 import io.micrometer.common.KeyValue;
+import io.micrometer.common.KeyValues;
 import io.micrometer.core.instrument.*;
 import io.micrometer.observation.Observation;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * Handler for {@link Timer.Sample} and {@link Counter}.
@@ -72,7 +71,7 @@ public class DefaultMeterObservationHandler implements MeterObservationHandler<O
     public void onStart(Observation.Context context) {
         if (shouldCreateLongTaskTimer) {
             LongTaskTimer.Sample longTaskSample = meterRegistry.more()
-                .longTaskTimer(context.getName() + ".active", createTags(context))
+                .longTaskTimer(context.getName() + ".active", context.getLowCardinalityKeyValues())
                 .start();
             context.put(LongTaskTimer.Sample.class, longTaskSample);
         }
@@ -85,10 +84,9 @@ public class DefaultMeterObservationHandler implements MeterObservationHandler<O
     // TODO decide what to do about context.getName being Nullable
     @SuppressWarnings("NullAway")
     public void onStop(Observation.Context context) {
-        List<Tag> tags = createTags(context);
-        tags.add(Tag.of("error", getErrorValue(context)));
+        KeyValues keyValues = context.getLowCardinalityKeyValues().and(KeyValue.of("error", getErrorValue(context)));
         Timer.Sample sample = context.getRequired(Timer.Sample.class);
-        sample.stop(this.meterRegistry.timer(context.getName(), tags));
+        sample.stop(this.meterRegistry.timer(context.getName(), keyValues));
 
         if (shouldCreateLongTaskTimer) {
             LongTaskTimer.Sample longTaskSample = context.getRequired(LongTaskTimer.Sample.class);
@@ -99,7 +97,7 @@ public class DefaultMeterObservationHandler implements MeterObservationHandler<O
     @Override
     public void onEvent(Observation.Event event, Observation.Context context) {
         Counter.builder(context.getName() + "." + event.getName())
-            .tags(createTags(context))
+            .tags(context.getLowCardinalityKeyValues())
             .register(meterRegistry)
             .increment();
     }
@@ -107,14 +105,6 @@ public class DefaultMeterObservationHandler implements MeterObservationHandler<O
     private String getErrorValue(Observation.Context context) {
         Throwable error = context.getError();
         return error != null ? error.getClass().getSimpleName() : KeyValue.NONE_VALUE;
-    }
-
-    private List<Tag> createTags(Observation.Context context) {
-        List<Tag> tags = new ArrayList<>();
-        for (KeyValue keyValue : context.getLowCardinalityKeyValues()) {
-            tags.add(Tag.of(keyValue.getKey(), keyValue.getValue()));
-        }
-        return tags;
     }
 
     /**

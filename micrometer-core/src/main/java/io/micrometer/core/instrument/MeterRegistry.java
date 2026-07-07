@@ -465,7 +465,7 @@ public abstract class MeterRegistry {
      * @return A new or existing counter.
      */
     public Counter counter(String name, Iterable<? extends KeyValue> tags) {
-        return counter(name, Tags.of(tags));
+        return counter(Meter.Id.of(name, tags, null, null, Meter.Type.COUNTER));
     }
 
     /**
@@ -521,7 +521,8 @@ public abstract class MeterRegistry {
      * @return A new or existing timer.
      */
     public Timer timer(String name, Iterable<? extends KeyValue> tags) {
-        return timer(name, Tags.of(tags));
+        return timer(Meter.Id.of(name, tags, null, null, Meter.Type.TIMER),
+                AbstractTimerBuilder.DEFAULT_DISTRIBUTION_CONFIG, pauseDetector);
     }
 
     /**
@@ -1107,7 +1108,8 @@ public abstract class MeterRegistry {
          * @return A new or existing long task timer.
          */
         public LongTaskTimer longTaskTimer(String name, Iterable<? extends KeyValue> tags) {
-            return longTaskTimer(name, Tags.of(tags));
+            return longTaskTimer(Meter.Id.of(name, tags, null, null, Meter.Type.LONG_TASK_TIMER),
+                    LongTaskTimer.Builder.DEFAULT_DISTRIBUTION_CONFIG);
         }
 
         /**
