@@ -54,7 +54,7 @@ class ImmutableKeyValue implements KeyValue {
     public boolean equals(@Nullable Object o) {
         if (this == o)
             return true;
-        if (!(o instanceof ImmutableKeyValue))
+        if (!(o instanceof KeyValue))
             return false;
         KeyValue that = (KeyValue) o;
         return Objects.equals(key, that.getKey()) && Objects.equals(value, that.getValue());
