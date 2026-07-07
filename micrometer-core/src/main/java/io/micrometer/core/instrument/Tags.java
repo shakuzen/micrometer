@@ -65,6 +65,9 @@ public final class Tags implements Iterable<Tag> {
      * @param tags an array of tags.
      * @return {@code true} if {@code tags} forms an ordered set; otherwise {@code false}.
      */
+    // Calls the deprecated Tag.compareTo(Tag) overload on purpose: sorting behavior for
+    // custom Tag implementations overriding it must not change.
+    @SuppressWarnings("deprecation")
     private static boolean isSortedSet(Tag[] tags) {
         for (int i = 0; i < tags.length - 1; i++) {
             int cmp = tags[i].compareTo(tags[i + 1]);
@@ -120,6 +123,9 @@ public final class Tags implements Iterable<Tag> {
      * @param other the set of tags to merge with this one.
      * @return a {@code Tags} instance with the merged sets of tags.
      */
+    // Calls the deprecated Tag.compareTo(Tag) overload on purpose: merge behavior for
+    // custom Tag implementations overriding it must not change.
+    @SuppressWarnings("deprecation")
     private Tags merge(Tags other) {
         if (other.length == 0) {
             return this;

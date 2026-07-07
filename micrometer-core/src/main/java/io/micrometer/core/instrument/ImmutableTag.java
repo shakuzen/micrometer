@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument;
 
+import io.micrometer.common.KeyValue;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
@@ -53,9 +54,9 @@ public class ImmutableTag implements Tag {
     public boolean equals(@Nullable Object o) {
         if (this == o)
             return true;
-        if (!(o instanceof ImmutableTag))
+        if (!(o instanceof KeyValue))
             return false;
-        Tag that = (Tag) o;
+        KeyValue that = (KeyValue) o;
         return Objects.equals(key, that.getKey()) && Objects.equals(value, that.getValue());
     }
 
