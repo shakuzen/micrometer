@@ -23,6 +23,20 @@ import io.micrometer.common.docs.KeyName;
 /**
  * Key/value pair representing a dimension of a meter used to classify and drill into
  * measurements.
+ * <p>
+ * All implementations must obey the following contract, comparable to the one of
+ * {@link java.util.Map.Entry}, so that instances of any two implementations can be used
+ * interchangeably, for example as elements of the same {@link KeyValues} or as parts of
+ * map keys:
+ * <ul>
+ * <li>equality: two {@code KeyValue} instances are equal if and only if both their keys
+ * and their values are equal, i.e.
+ * {@code o instanceof KeyValue && getKey().equals(((KeyValue) o).getKey()) && getValue().equals(((KeyValue) o).getValue())}</li>
+ * <li>hash code: {@code 31 * getKey().hashCode() + getValue().hashCode()}</li>
+ * <li>ordering: the {@linkplain #compareTo(KeyValue) natural ordering} is by key only.
+ * Note that the natural ordering is therefore inconsistent with equals: two instances
+ * with the same key and different values compare as equal but are not equal.</li>
+ * </ul>
  *
  * @author Jon Schneider
  * @since 1.10.0
@@ -94,6 +108,17 @@ public interface KeyValue extends Comparable<KeyValue> {
         return KeyValue.of(keyName.asString(), value, validator);
     }
 
+    /**
+     * Compares by key only. Note that this natural ordering is inconsistent with equals:
+     * two instances with the same key and different values compare as equal but are not
+     * equal.
+     * @param o the {@code KeyValue} to be compared
+     * @return the value {@code 0} if the key of the argument is equal to the key of this
+     * {@code KeyValue}; a value less than {@code 0} if the key of this {@code KeyValue}
+     * is lexicographically less than the key of the argument; and a value greater than
+     * {@code 0} if the key of this {@code KeyValue} is lexicographically greater than the
+     * key of the argument
+     */
     @Override
     default int compareTo(KeyValue o) {
         return getKey().compareTo(o.getKey());

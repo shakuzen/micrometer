@@ -15,6 +15,9 @@
  */
 package io.micrometer.common;
 
+import org.jspecify.annotations.Nullable;
+
+import java.util.Objects;
 import java.util.function.Predicate;
 
 /**
@@ -52,6 +55,23 @@ class ValidatedKeyValue<T> implements KeyValue {
         }
 
         return value;
+    }
+
+    @Override
+    public boolean equals(@Nullable Object o) {
+        if (this == o)
+            return true;
+        if (!(o instanceof KeyValue))
+            return false;
+        KeyValue that = (KeyValue) o;
+        return Objects.equals(key, that.getKey()) && Objects.equals(value, that.getValue());
+    }
+
+    @Override
+    public int hashCode() {
+        int result = key.hashCode();
+        result = 31 * result + value.hashCode();
+        return result;
     }
 
     @Override
