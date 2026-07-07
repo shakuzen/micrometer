@@ -378,20 +378,31 @@ public final class Tags implements Iterable<Tag> {
         }
         else if (tags instanceof Collection) {
             Collection<? extends KeyValue> tagsCollection = (Collection<? extends KeyValue>) tags;
-            Tag[] tagsArray = new Tag[tagsCollection.size()];
-            int i = 0;
-            for (KeyValue keyValue : tagsCollection) {
-                if (i == tagsArray.length) {
-                    // only reachable if the collection was concurrently grown
-                    tagsArray = Arrays.copyOf(tagsArray, i + 2);
-                }
-                tagsArray[i++] = toTag(keyValue);
-            }
-            return toTags(i == tagsArray.length ? tagsArray : Arrays.copyOf(tagsArray, i));
+            return toTags(toTagArray(tagsCollection, tagsCollection.size()));
         }
         else {
-            return toTags(StreamSupport.stream(tags.spliterator(), false).map(Tags::toTag).toArray(Tag[]::new));
+            long exactSize = tags.spliterator().getExactSizeIfKnown();
+            return toTags(toTagArray(tags, exactSize >= 0 ? (int) exactSize : 8));
         }
+    }
+
+    /**
+     * Copy the given key values into a new {@code Tag} array, converting elements as
+     * necessary.
+     * @param keyValues the key values to copy
+     * @param expectedSize the expected number of elements, used to size the array
+     * @return a new array of exactly the iterated elements
+     */
+    private static Tag[] toTagArray(Iterable<? extends KeyValue> keyValues, int expectedSize) {
+        Tag[] tagsArray = new Tag[expectedSize];
+        int i = 0;
+        for (KeyValue keyValue : keyValues) {
+            if (i == tagsArray.length) {
+                tagsArray = Arrays.copyOf(tagsArray, i + Math.max(2, i >> 1));
+            }
+            tagsArray[i++] = toTag(keyValue);
+        }
+        return i == tagsArray.length ? tagsArray : Arrays.copyOf(tagsArray, i);
     }
 
     /**
