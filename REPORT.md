@@ -68,6 +68,60 @@ Design constraints confirmed along the way:
   reuse safely); it still benefits from the widened signature. Extracting a shared default would be a
   follow-up.
 
+## Prior art: the 2022 attempt (#3097 / #3111) and how this prototype differs
+
+This was tried before, in the run-up to 1.10 (March–April 2022), and abandoned explicitly over
+compatibility concerns. The trail:
+
+- PR [#3097](https://github.com/micrometer-metrics/micrometer/pull/3097) "Deprecating Tag and Tags in
+  core and moving them to commons" and PR [#3111](https://github.com/micrometer-metrics/micrometer/pull/3111)
+  "Deprecating tags in core" (branches `tags_copied_to_commons` / `deprecating_tags_in_core`, still on
+  marcingrzejszczak's fork). The design was the same idea **inverted**: a new `io.micrometer.common.Tag`
+  as the parent type, core `Tag extends io.micrometer.common.Tag` with the whole core type deprecated,
+  and `Iterable<Tag>` parameters widened to `Iterable<? extends io.micrometer.common.Tag>` — the same
+  erasure-based widening as commit 3 here.
+- #3111 was closed unmerged (2022-04-12) with the verdict: *"We're going to take a different approach
+  to solve the problem, as this approach is too invasive, burdensome on users, and potential for subtle
+  incompatibilities are too much."*
+- PR [#3120](https://github.com/micrometer-metrics/micrometer/pull/3120) then reverted all breaking
+  changes to ensure 1.10.0↔1.9.0 binary compatibility, and PR
+  [#3122](https://github.com/micrometer-metrics/micrometer/pull/3122) pivoted to renaming the commons
+  types to **KeyValue/KeyValues as deliberately distinct types** ("Trying to fix the Tag & Tags
+  confusion"), even removing `TagKey.of` so commons could not hand out tags usable by core. That
+  decision is why the KeyValue→Tag boundary conversion this branch removes exists in the first place
+  (and issue [#3102](https://github.com/micrometer-metrics/micrometer/issues/3102) records the
+  user-facing conversion friction it caused from day one).
+
+How each recorded concern maps onto this prototype:
+
+| 2022 concern | 2022 attempt | this prototype |
+|---|---|---|
+| "too invasive" | 249 files, +6.1k/−1.7k lines; every binder and registry touched; `Tag`, `Tags`, `ImmutableTag` all deprecated and re-homed | 17 main-source files across commons+core; no type moves, no type deprecations; binders untouched; whole repo compiles unchanged |
+| "burdensome on users" | ecosystem-wide deprecation warnings on `Tag`/`Tags` usage; users pushed to migrate to a new type with the same simple name (confusion called out in #3122) | `Tag` stays the first-class metrics type; nothing to migrate; the only deprecation is the `compareTo(Tag)` overload, visible only to custom implementors overriding it |
+| "potential for subtle incompatibilities" | unenumerated risk (no fixture/japicmp evidence in the PRs); plus a real one baked into the design: common `Tag extends Comparable<Object>` whose `compareTo` returned `-1` for non-Tags — violating comparator antisymmetry (flagged in #3097 review) | the risk is now enumerated and tested instead of feared: japicmp is clean with a resolvable classpath, and the fixture reduces the behavioral delta to the two documented edges (CCE through old-compiled iterating decorators; sort dispatch for recompiled custom `compareTo(Tag)`) with mitigations proposed — see the sections below |
+| the `Comparable` generics wall | "solved" with `Comparable<Object>` + instanceof | solved by inheriting `Comparable<KeyValue>` — key-only ordering with an intact contract |
+
+Two more pieces of relevant history:
+
+- In the #3097 review, jonatan-ivanov proposed sorting `Tags` internals with
+  `Comparator.comparing(Tag::getKey)` ("a universal Comparator that can compare both type of tags")
+  instead of relying on the elements' `Comparable` at all — that is exactly the alternative behind
+  open question 2 below (key-only comparison in `Tags` internals would also erase the Edge 2 wart, at
+  the cost of changing behavior for old binaries with custom orderings).
+- Issue [#2092](https://github.com/micrometer-metrics/micrometer/issues/2092) / PR
+  [#2431](https://github.com/micrometer-metrics/micrometer/pull/2431) (2020–2022) debated widening
+  `Iterable<Tag>` → `Iterable<? extends Tag>`; jkschneider warned not to confuse source with binary
+  compatibility, and the `Tags.concat` widening was merged in 2022 only after ABI-compatibility was
+  confirmed. Commit 3 here is the same class of change, and this investigation re-proves the erasure
+  argument empirically (japicmp `===` on descriptors; old-compiled override dispatch verified by the
+  fixture) rather than re-litigating it.
+
+In short: the previously found problems were (1) blast radius of deprecating/re-homing the types,
+(2) user migration burden, (3) unquantified subtle-incompatibility risk, and (4) the Comparable
+generics wall. (1), (2), and (4) are designed out in this prototype; (3) has been converted into a
+concrete, fixture-verified two-item list with proposed mitigations, which is exactly what the open
+questions below put in front of the team.
+
 ## japicmp
 
 ### Repo build task (`./gradlew :module:japicmp`, baseline `1.16.0`, `failOnModification` + `failOnSourceIncompatibility`)
