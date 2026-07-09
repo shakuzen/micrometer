@@ -14,13 +14,17 @@ $out = "out-$Tag"
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory $out | Out-Null
 
-$sources = @('src/AllocBench.java')
+$sources = @(Get-ChildItem src/*.java | ForEach-Object { $_.FullName })
 if ($New) { $sources += 'src-new/AllocBenchNew.java' }
 javac -nowarn -cp $cp -d $out @sources
 if ($LASTEXITCODE -ne 0) { throw 'javac failed' }
 
 foreach ($s in @('cached_sample', 'lifecycle_ltt', 'lifecycle_noltt', 'tags_convert')) {
     java '-XX:+UseParallelGC' -Xms512m -Xmx512m -cp "$out;$cp" AllocBench $s
+    if ($LASTEXITCODE -ne 0) { throw "run failed: $s" }
+}
+foreach ($s in @('timer_solo', 'lifecycle_solo', 'mixed')) {
+    java '-XX:+UseParallelGC' -Xms512m -Xmx512m -cp "$out;$cp" AllocBenchMixed $s
     if ($LASTEXITCODE -ne 0) { throw "run failed: $s" }
 }
 if ($New) {

@@ -372,11 +372,45 @@ force the view, so registries that publish via convention tags never pay the con
 before.) The cache field is non-volatile by design: a benign data race on an immutable value
 (`String.hash`-style), documented in the field's javadoc.
 
+### Call-site polymorphism (JIT) check
+
+Concern: today, `Tag`-typed and `KeyValue`-typed call sites are effectively monomorphic
+(`ImmutableTag` / `ImmutableKeyValue` respectively), which is ideal for inline caches. After this
+change, shared library sites can see both classes — most importantly `Meter.Id.hashCode/equals`
+element accesses on the registry-lookup hot path, since Tags-built ids hold `ImmutableTag` elements
+while KeyValues-built ids hold `ImmutableKeyValue` elements. Does bimorphism eat the conversion win?
+
+`AllocBenchMixed` runs two ops against **one shared registry**: a Tags-typed lookup
+(`registry.timer(name, Tags)`, Id built from `ImmutableTag`s) and the no-LTT observation lifecycle
+(Id built from `ImmutableKeyValue`s) — each alone per JVM ("solo", clean profiles) and interleaved in
+one JVM ("mixed", polluted profiles). Old jars are the control: there the same mixed workload stays
+monomorphic because the handler converts everything to `ImmutableTag` up front.
+
+| jars | op | solo | mixed |
+|---|---|---|---|
+| 1.16.2 (control) | Tags-typed timer lookup | 22.0 ns / 40 B | 14.8 ns / 40 B |
+| 1.16.2 (control) | observation lifecycle | 645.6 ns / 1,880 B | 643.2 ns / 1,880 B |
+| prototype | Tags-typed timer lookup | 15.4 ns / 48 B | 13.6–13.9 ns / 48 B (5 runs) |
+| prototype | observation lifecycle | median **434.7 ns / 1,496 B** (8 runs: 399–479) | median **434.4 ns / 1,496 B** (8 runs: 419–482) |
+
+**No systematic bimorphic penalty was measurable.** A first sample suggested +45 ns on the mixed
+observation path, but 8 paired JVM runs per mode show the medians are indistinguishable; the apparent
+delta was a **bistable JIT/escape-analysis outcome** (~430 ns/1,496 B vs ~480 ns/1,688 B per JVM,
+landing in the slow state once per 8 runs in *both* modes — unmodified `main` flaps the same way,
+1,576↔1,696 B, so the bistability is not introduced by this change). Even the slow state beats the
+old jars' mixed workload by ~25 %. Mechanistically this matches expectations: C2 inlines bimorphic
+sites behind a single subtype check, and `ImmutableTag.getKey/getValue/hashCode/equals` and their
+`ImmutableKeyValue` twins are tiny. Two honest caveats: (a) the measured `Meter.Id` object itself
+grew by ~8 B (the extra `count`/cache fields — visible as 40→48 B on the lookup op); (b) if a
+**third** implementation ever becomes hot at these sites (`ValidatedKeyValue`, custom
+`Tag`/`KeyValue` impls), they go megamorphic (C2 inlines at most two receivers) — not measured here,
+and worth a `-prof perfasm` JMH pass on Linux before final judgment.
+
 JMH: not run — the existing `DefaultMeterObservationHandlerBenchmark` exercises 1 key-value at 4
 threads, so it does not match the 5-key-value single-threaded target scenario; the ThreadMXBean
 harness above is the primary measurement per the investigation brief. Running the JMH suite with
-`GCProfiler` before/after (and possibly adding a 5-key-value convention benchmark) is a cheap
-follow-up for confirmation on Linux.
+`GCProfiler` (and `perfasm` for the polymorphism question) before/after, plus a 5-key-value
+convention benchmark, is a cheap follow-up for confirmation on Linux.
 
 ## Open questions for the maintainer team
 

@@ -21,12 +21,15 @@ cp_libs=$(join_jars "../libs-$tag")
 out="out-$tag"
 rm -rf "$out" && mkdir -p "$out"
 
-sources=(src/AllocBench.java)
+sources=(src/*.java)
 [ "$with_new" = "--new" ] && sources+=(src-new/AllocBenchNew.java)
 javac -nowarn -cp "$cp_libs" -d "$out" "${sources[@]}"
 
 for scenario in cached_sample lifecycle_ltt lifecycle_noltt tags_convert; do
   java -XX:+UseParallelGC -Xms512m -Xmx512m -cp "$out$SEP$cp_libs" AllocBench "$scenario"
+done
+for scenario in timer_solo lifecycle_solo mixed; do
+  java -XX:+UseParallelGC -Xms512m -Xmx512m -cp "$out$SEP$cp_libs" AllocBenchMixed "$scenario"
 done
 if [ "$with_new" = "--new" ]; then
   for scenario in tags_of_kv tags_convert5 id_gettags; do
