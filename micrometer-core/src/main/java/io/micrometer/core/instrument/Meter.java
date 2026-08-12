@@ -199,13 +199,12 @@ public interface Meter {
         private final int count;
 
         /**
-         * Lazily computed {@link Tags} view of {@link #keyValues}, cached on first use.
-         * Populated eagerly when this id was created from a {@link Tags} instance.
-         * Intentionally not volatile: the reference is immutable and any concurrently
-         * computed values are equal, so this is a benign data race (like
-         * {@code String.hash}).
+         * The {@link Tags} view of {@link #keyValues}; non-null only when this id was
+         * created from a {@link Tags} instance. For ids created from key values, the view
+         * is computed on demand in {@link #tagsView()} and intentionally not cached,
+         * keeping this class free of lazily initialized state.
          */
-        private @Nullable Tags tags;
+        private final @Nullable Tags tags;
 
         private final Type type;
 
@@ -274,15 +273,14 @@ public interface Meter {
         }
 
         /**
-         * Return the (lazily computed) {@link Tags} view of this id's key values.
+         * Return the {@link Tags} view of this id's key values, computing it if this id
+         * was not created from a {@link Tags} instance. Tag-typed accessors on such ids
+         * are off the meter registration/lookup hot path, so the computed view is not
+         * cached; callers that iterate repeatedly should hold on to the result.
          */
         private Tags tagsView() {
             Tags tags = this.tags;
-            if (tags == null) {
-                tags = Tags.fromSortedKeyValues(keyValues, count);
-                this.tags = tags;
-            }
-            return tags;
+            return tags != null ? tags : Tags.fromSortedKeyValues(keyValues, count);
         }
 
         /**

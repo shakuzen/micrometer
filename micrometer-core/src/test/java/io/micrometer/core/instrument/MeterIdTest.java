@@ -90,8 +90,8 @@ class MeterIdTest {
         assertThat(id.getTagsAsIterable()).containsExactly(Tag.of("a", "1"), Tag.of("b", "2"));
         assertThat(id.getTag("a")).isEqualTo("1");
         assertThat(id.getTag("nope")).isNull();
-        // the lazily computed Tags view is cached
-        assertThat(id.getTagsAsIterable()).isSameAs(id.getTagsAsIterable());
+        // repeated calls return equal (not cached) views
+        assertThat(id.getTagsAsIterable()).isEqualTo(id.getTagsAsIterable());
     }
 
     @Test
