@@ -11,7 +11,9 @@ single-threaded `ThreadMXBean#getThreadAllocatedBytes` harness.
 
 ## Summary verdict
 
-**Feasible in 1.x, with two documented edges that need a maintainer decision.**
+**Feasible in 1.x. The one hard blocker found (a ClassCastException through old-compiled registry
+decorators) has been eliminated by a 16-byte-per-observation mitigation; what remains for a
+maintainer decision is one deprecation wart and a small residual risk for new user code.**
 
 - **Binary compatibility for standard usage holds.** Method descriptors are unchanged
   (`Iterable<Tag>` and `Iterable<? extends KeyValue>` erase identically), `Comparable` remains in
@@ -20,12 +22,15 @@ single-threaded `ThreadMXBean#getThreadAllocatedBytes` harness.
   custom `compareTo`), old-compiled `MeterRegistry` subclasses overriding `timer(String, Iterable<Tag>)`,
   sorting, `HashMap` keying of `Tags`/`Meter.Id`, and direct `compareTo` calls all behave identically
   on the new jars (fixture-verified, not just argued).
-- **Edge 1 — heap-pollution dispatch hazard (the one real behavioral incompatibility found):**
-  when new-style code passes a `KeyValues` through the widened virtual
-  `MeterRegistry.timer(String, Iterable)` — which `DefaultMeterObservationHandler` now does — an
-  **old-compiled** subclass override that iterates the elements as `Tag` throws
-  `ClassCastException`. Reproduced deterministically in the fixture. Mitigations below; this is the
-  main go/no-go item.
+- **Edge 1 — heap-pollution dispatch hazard, found and mitigated:** when non-`Tag` elements pass
+  through the widened virtual `MeterRegistry.timer(String, Iterable)`, an **old-compiled** subclass
+  override that iterates the elements as `Tag` throws `ClassCastException` (reproduced
+  deterministically in the fixture; a code search found WildFly's `ApplicationRegistry` shipping
+  exactly this shape). The handler therefore passes a lazily converting `Iterable<Tag>` view
+  (`KeyValuesTagIterable`, commit 7): old iterating decorators receive genuine `Tag`s and keep their
+  semantics, while `Meter.Id` unwraps the view so the non-decorated path stays conversion-free
+  (+16 B/op measured, timings unchanged). Residual risk is limited to *new user code* passing raw
+  `KeyValues` into an old-compiled iterating decorator directly — see the CCE section.
 - **Edge 2 — sort-dispatch wart for recompiled custom comparators:** a custom `Tag` implementation
   overriding `compareTo(Tag)` keeps its custom ordering as an old binary, but **after recompilation**
   `Arrays.sort`/`Collections.sort`/`TreeSet` silently stop dispatching to it (they route through
@@ -42,8 +47,10 @@ single-threaded `ThreadMXBean#getThreadAllocatedBytes` harness.
   2,348 → ~1,860 B/op vs 1.16.2). The KeyValue→Tag conversion is gone from the per-observation path;
   what remains is dominated by the Observation machinery itself (context, convention invocation ×2,
   scope ThreadLocals), which caps the achievable win for the no-LTT case at roughly −10 % allocation.
-  Conversion provably moved to publish time: first `getTagsAsIterable()` on a KeyValues-built id costs
-  ~31 ns / 184 B; every subsequent call is ~8 ns / 0 B (cached view).
+  Conversion provably moved to publish time: `getTagsAsIterable()` on a KeyValues-built id costs
+  ~24–31 ns / 184 B per call (the view is computed per call since commit 6 removed the cache; with
+  caching it was ~8 ns / 0 B after the first call — see the caching subsection). Confirmed
+  independently by the repo's JMH benchmarks (see the JMH subsection).
 
 ## The commits
 
@@ -54,6 +61,8 @@ single-threaded `ThreadMXBean#getThreadAllocatedBytes` harness.
 | `d20d590c4` | 3 — widen `Iterable<Tag>` → `Iterable<? extends KeyValue>` in place on `Tags.of/and/concat`, `MeterRegistry.counter/summary/timer`, `More.longTaskTimer`, the `Metrics` facade, and the meter builders' `tags(Iterable)` |
 | `11c8144ea` | 4 — `Meter.Id` stores a sorted, deduplicated `KeyValue[]`; lazy cached `Tags` view; internal `Meter.Id.of(String, Iterable<? extends KeyValue>, …)` path; `DefaultMeterObservationHandler` passes `KeyValues` through; duplicate-meter regression tests |
 | `1e0e23410` | 5 (follow-up found by measurement) — size-and-loop instead of a stream in `Tags.of`'s non-`Collection` branch (408 → 184 B for `Tags.of(keyValues)` with 5 pairs) |
+| `917b1d44e` | 6 — do **not** cache the computed `Tags` view in `Meter.Id` (final field, set eagerly only for Tags-built ids); see the caching-cost subsection under Performance |
+| `638858ed6` | 7 — `KeyValuesTagIterable`: the handler passes a lazily converting `Iterable<Tag>` view through the overridable convenience methods, eliminating the ClassCastException hazard for old-compiled iterating registry overrides (fixture-verified) while `Meter.Id.of` unwraps it so the non-overridden path performs no conversion |
 
 Design constraints confirmed along the way:
 
@@ -194,34 +203,61 @@ Old-compiled classes on **new** jars — everything identical to old jars:
   `timer(String, Iterable<Tag>)` is **still dispatched** through the widened method, sees its `Tag`
   elements, and meter deduplication works through it
 
-Old-compiled classes on new jars — the **one deviation**, reproduced deterministically:
+### The ClassCastException hazard — found, analyzed, and mitigated
+
+This was the one real behavioral incompatibility found, and the key question for shipping in a
+minor release. Full anatomy:
+
+**Mechanism.** With commit 4 alone, `DefaultMeterObservationHandler.onStop` passed the context's
+`KeyValues` into the *virtual* `meterRegistry.timer(String, Iterable)` call. A registry subclass
+compiled against ≤1.17 that overrides `timer(String name, Iterable<Tag> tags)` still receives the
+call (same erased descriptor), but javac compiled its element access with a cast. From the fixture's
+old-compiled `MyRegistry.class` (`javap -c`):
 
 ```
-INFO: ClassCastException: class io.micrometer.common.ImmutableKeyValue cannot be cast to
-      class io.micrometer.core.instrument.Tag
-PASS: DISPATCH HAZARD: observation through old-compiled iterating override throws CCE on new jars
+22: invokeinterface #29,  1   // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+27: checkcast     #33         // class io/micrometer/core/instrument/Tag   <-- throws here
 ```
 
-An `Observation` handled by `DefaultMeterObservationHandler` wired to `MyRegistry` works on old jars
-(the handler converted to `List<Tag>` first) but throws on new jars: the handler now passes the
-context's `KeyValues` into the virtual `timer(String, Iterable)` call, and the old-compiled override's
-`for (Tag tag : tags)` checkcasts each element. Notes for the decision:
+With `ImmutableKeyValue` elements, instruction 27 throws
+`ClassCastException: class io.micrometer.common.ImmutableKeyValue cannot be cast to class
+io.micrometer.core.instrument.Tag` — on **every** observation stop, propagating out of
+`Observation.stop()` into the instrumented request path. Loud and immediate (caught in any smoke
+test), not silent corruption — but catastrophic where triggered. Trigger requires all of: an
+old-compiled subclass overriding a widened convenience method, that override casting elements to
+`Tag` (iteration, streams, `toArray(new Tag[0])`, lambdas typed `Tag`), and non-`Tag` elements
+flowing in. Of the widened methods, only `timer(String, Iterable)` (observation stop) and
+`More.longTaskTimer` (observation start, reachable only via an overridden `more()`, practically
+never) carried `KeyValues` from micrometer itself; `counter` via `onEvent` goes through
+`Counter.builder` and never hits the virtual convenience method.
 
-- Trigger requires *both* an old-compiled subclass overriding `timer(String, Iterable<Tag>)` (or
-  another widened method) that iterates/uses elements as `Tag`, *and* non-`Tag` elements flowing in —
-  today that is only `DefaultMeterObservationHandler` (timer + LTT paths) or users adopting the new API.
-  Overrides that merely delegate (`super.timer(name, tags)`) are unaffected.
-- Overriding these convenience methods was never the documented registry extension point
-  (`newTimer(Id, …)` etc. is, and it is unaffected), but wrapper/decorator registries in the wild do exist.
-- Mitigation options, in rising order of conservatism:
-  1. accept + release-note (current prototype behavior);
-  2. route the handler through a non-virtual path (build the `Meter.Id` internally and call the
-     package-private `timer(Id, …)`), so old overrides never see `KeyValues` — cost: decorators that
-     *do* override the convenience methods silently stop seeing observation-driven registrations
-     (they see them today);
-  3. have the handler keep passing a `Tags` (`Tags.of(keyValues)`) — safest, but reintroduces the
-     per-element conversion at stop time and forfeits roughly half of the timer-path win (the `Id`
-     construction saving survives via the eager-`Tags` fast path).
+**Affected population is real.** A GitHub code search for the exact override signature
+(`gh api search/code`, "public Timer timer(String name, Iterable<Tag>") finds, besides micrometer
+forks: **WildFly's `ApplicationRegistry`** (delegating registry that *streams the elements through a
+`Tag`-typed lambda* to add a `wf_deployment` tag — would have thrown), **Expedia Styx's
+`PluginMeterRegistry`** (passes the iterable straight to `Tags.and` — safe, converts correctly), and
+**Kora's `NoopMeterRegistry`** (returns a constant — safe). One confirmed-vulnerable, widely
+deployed integration is enough to rule out shipping the raw-`KeyValues` behavior in a minor.
+
+**Mitigation implemented (commit `638858ed6`).** The handler now wraps the `KeyValues` in
+`KeyValuesTagIterable` (internal, `io.micrometer.core.instrument.internal`), a 16-byte lazily
+converting `Iterable<Tag>` view: any override that iterates receives genuine `Tag` elements
+(per-element `instanceof` fast path), so WildFly-style decorators keep working **with identical
+semantics** — they see the meters, their added tags apply, nothing changes for them. On the
+non-overridden path the view's iterator is never invoked: `Meter.Id.of` unwraps it to the backing
+`KeyValues` and builds the id conversion-free. Measured cost: exactly the wrapper allocation
+(+16 B/op, e.g. 1,496 → 1,512 B on the no-LTT lifecycle; timings unchanged). The fixture's
+observation-through-old-compiled-iterating-override check, which previously demonstrated the CCE,
+now passes on new jars **and** verifies the override observed the converted `Tag` elements.
+
+**Residual risk (documented, not mitigated):** *new user code* that passes a raw `KeyValues` (or any
+non-`Tag` iterable) directly into the widened public methods of a registry wrapped by an old-compiled
+iterating decorator can still trigger the same CCE. That requires newly written code meeting an
+old binary, is outside micrometer's own call paths, and fails loudly on first use; the javadoc of the
+widened methods could warn about it. Alternatives considered and rejected: routing the handler
+through a non-virtual path (old decorators like WildFly would silently stop seeing/tagging
+observation meters — a silent behavior change, worse than none); passing materialized `Tags`
+(same safety as the view but pays per-element conversion even when no decorator exists).
 
 The recompiled-fixture run also demonstrates Edge 2 (same source, recompiled against the prototype):
 
@@ -298,9 +334,9 @@ preservation) and `@Override` on `Tag.getKey/getValue` (ErrorProne `MissingOverr
   registry**; and vice versa; same for `counter` and `more().longTaskTimer`; also with a
   `commonTags` `MeterFilter` configured (exercises the `mapId`/`meterMap` path, not just
   `preFilterIdToMeterMap`)
-- tag-typed accessors on a KeyValues-built id return equal `Tag`s; the lazily computed `Tags` view is
-  cached (`getTagsAsIterable()` returns the same instance); `withName/withBaseUnit/withTag/replaceTags`
-  and `toString()` behave identically across both construction paths
+- tag-typed accessors on a KeyValues-built id return equal `Tag`s (equal views on repeated calls);
+  `withName/withBaseUnit/withTag/replaceTags` and `toString()` behave identically across both
+  construction paths
 
 This is what commit 1 exists for: `Meter.Id.equals/hashCode` now iterate the stored `KeyValue[]`,
 so `ImmutableTag`/`ImmutableKeyValue` elements must collide. A consequence worth calling out: any
@@ -356,21 +392,26 @@ is why the no-LTT allocation win is proportionally smaller — its meter path wa
 (Commit 5 exists because the measurement exposed the stream-based fallback as a regression relative
 to the manual loop; with it, `Tags.of(keyValues)` beats the old conversion pattern on both axes.)
 
-### Conversion moved to publish time
+### Conversion moved to publish time, and what caching the view is worth
 
 On a `Meter.Id` registered via `registry.timer(name, keyValues)` (KeyValues-built, no `Tags`
-materialized during registration):
+materialized during registration), `getTagsAsIterable()` was measured in both `Meter.Id` variants:
 
-| call | ns/call | B/call |
+| call | with view caching (commit 4) | without caching (commit 6, current) |
 |---|---|---|
-| first `getTagsAsIterable()` (lazy `Tag[]` conversion + `Tags` view) | 30.5 | 184 |
-| subsequent `getTagsAsIterable()` (cached view) | **8.2** | **0** |
+| first `getTagsAsIterable()` | 30.5 ns / 184 B | 31.7 ns / 184 B |
+| repeated `getTagsAsIterable()` | 8.2 ns / 0 B | 23.7 ns / 184 B |
 
-`getTag(String)` and `getConventionTags(NamingConvention)` read the `KeyValue[]` directly and never
-force the view, so registries that publish via convention tags never pay the conversion at all.
-(`getTags()` itself copies into a fresh unmodifiable `List` on every call — unchanged behavior from
-before.) The cache field is non-volatile by design: a benign data race on an immutable value
-(`String.hash`-style), documented in the field's javadoc.
+That difference — ~16 ns and 184 B per repeated tag-typed accessor call, for 5 key values — is the
+*entire* value of the cache, and it only accrues on KeyValues-built ids whose `Tags` view is
+requested more than once. Nothing on the registration/lookup hot path touches the view
+(`equals`/`hashCode`/`getTag(String)`/`getConventionTags` all read the `KeyValue[]` directly), which
+the lifecycle scenarios confirm: identical results under both variants. The realistic repeated
+consumer is a registry that iterates `getTagsAsIterable()`/`getTags()` per publish interval —
+~184 B × meters, per interval, i.e. noise. The prototype therefore ships **without** the cache
+(final field, no lazily initialized state, trivially thread-safe); reintroducing the benign-data-race
+cache later needs no API change if a profile ever justifies it. (`getTags()` copies into a fresh
+unmodifiable `List` on every call in *both* variants — unchanged from the status quo.)
 
 ### Call-site polymorphism (JIT) check
 
@@ -406,18 +447,51 @@ grew by ~8 B (the extra `count`/cache fields — visible as 40→48 B on the loo
 `Tag`/`KeyValue` impls), they go megamorphic (C2 inlines at most two receivers) — not measured here,
 and worth a `-prof perfasm` JMH pass on Linux before final judgment.
 
-JMH: not run — the existing `DefaultMeterObservationHandlerBenchmark` exercises 1 key-value at 4
-threads, so it does not match the 5-key-value single-threaded target scenario; the ThreadMXBean
-harness above is the primary measurement per the investigation brief. Running the JMH suite with
-`GCProfiler` (and `perfasm` for the polymorphism question) before/after, plus a 5-key-value
-convention benchmark, is a cheap follow-up for confirmation on Linux.
+### Repo JMH benchmarks (before = unmodified `main`, after = this branch incl. commits 6–7)
+
+`benchmarks-core` jmh jars built from each side and run identically on the same machine
+(JDK 25, Windows; `-wi 3 -w 1s -i 5 -r 1s -prof gc`, first pass `-f 1`, flagged results re-verified
+with `-f 3` and `-t 1`). Headline rows (annotation-default thread counts):
+
+| benchmark | before | after | delta |
+|---|---|---|---|
+| `DefaultMeterObservationHandlerBenchmark.observation` (4 threads, 1 key-value) | 1,021.6 ns / 1,310 B | 976.4 ns / 1,199 B | −4.4 % ns, **−111 B** |
+| `…observationWithoutThreadContention` (1 thread, 1 key-value) | 405.0 ns / 1,284 B | 388.9 ns / 1,172 B | −4.0 % ns, **−112 B** |
+| `…builtTimerWithSample` / `…observationOrTimer` / `…builtTimerAndLongTaskTimer` | — | — | +8…19 B (larger `Meter.Id`), ns within noise |
+| `MeterRegistrationBenchmark.registerExistingTimer` (re-verified `-f 3 -t 1`) | 16.0 ns / 40 B | 16.8 ns / 48 B | **+0.8 ns, +8 B** |
+| `MeterRegistrationBenchmark.registerExistingCounter` (re-verified `-f 3 -t 1`) | 19.6 ns / 40 B | 19.9 ns / 48 B | +0.4 ns, +8 B |
+| `TagsBenchmark.dotAnd` (re-verified `-f 3`) | 56.9 ns / 336 B | 57.1 ns / 336 B | no change |
+| `TagsBenchmark.tagsOf(Un)orderedTagsSet{2,4,10}`, `.of` | — | — | no change beyond noise |
+
+Reading:
+
+- The observation benchmarks confirm the harness result at the benchmark's own shape (only **1**
+  low-cardinality key-value, no convention): −111/−112 B per observation is exactly the eliminated
+  `ArrayList` + per-element `Tag` conversion + `Tags`/`Id` materialization for that size; with 5
+  key-values (the harness scenario) the same mechanism removes ~300–440 B.
+- The one real cost found: the Tags-typed lookup (`registry.timer(name, Tags)` on an existing meter)
+  pays **+8 B/op** (the `Meter.Id` object grew by the `keyValues`+`count` fields) and **<1 ns**.
+  Part of the ns delta is plausibly `ImmutableTag.equals`' `instanceof KeyValue` now being an
+  interface check where `instanceof ImmutableTag` was an exact-class check; adding an exact-class
+  fast path in `ImmutableTag`/`ImmutableKeyValue.equals` is a one-line follow-up candidate if this
+  matters at scale.
+- First-pass `-f 1` numbers flagged `registerExisting*` at +43…65 % and `dotAnd` at +48 B; all of it
+  dissolved under `-f 3`/`-t 1` (and `KeyValuesBenchmark.dotAnd` — **untouched code** — moved +10 %
+  between runs). Single-fork JMH on this Windows box has a noise floor of several ns / tens of bytes
+  from bistable compilation; conclusions above use only the re-verified runs. A Linux perf-rig JMH
+  pass (with `-prof perfasm` for the instanceof/polymorphism questions, and ideally a new
+  5-key-value convention benchmark in `DefaultMeterObservationHandlerBenchmark`) is the recommended
+  confirmation before merging anything.
 
 ## Open questions for the maintainer team
 
-1. **The CCE dispatch hazard (Edge 1)** — accept + release-note, reroute the handler through a
-   non-virtual internal path (hides observation registrations from convenience-method decorators), or
-   keep passing `Tags` from the handler (forfeits ~half the timer-path win)? This is the main risk
-   decision; everything else was clean.
+1. **The CCE dispatch hazard (Edge 1)** — mitigated via the `KeyValuesTagIterable` converting view
+   (commit 7): old-compiled iterating decorators (e.g. WildFly) keep working with identical
+   semantics, at +16 B per observation. To review: (a) is the internal-package placement acceptable,
+   or should the view live elsewhere; (b) the residual risk that *new user code* passing raw
+   `KeyValues` into an old-compiled iterating decorator still throws — accept with a javadoc warning
+   on the widened methods, or additionally have the widened javadoc recommend `Tags.of(...)` when
+   targeting wrapped registries?
 2. **Recompiled custom `compareTo(Tag)` losing sort dispatch (Edge 2)** — is deprecation javadoc
    enough, or should `Tags` internals switch to key-only comparison outright so old- and new-compiled
    implementors at least behave identically (a behavior change for old binaries that "worked" with
