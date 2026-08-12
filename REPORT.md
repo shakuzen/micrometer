@@ -227,8 +227,10 @@ test), not silent corruption — but catastrophic where triggered. Trigger requi
 old-compiled subclass overriding a widened convenience method, that override casting elements to
 `Tag` (iteration, streams, `toArray(new Tag[0])`, lambdas typed `Tag`), and non-`Tag` elements
 flowing in. Of the widened methods, only `timer(String, Iterable)` (observation stop) and
-`More.longTaskTimer` (observation start, reachable only via an overridden `more()`, practically
-never) carried `KeyValues` from micrometer itself; `counter` via `onEvent` goes through
+`More.longTaskTimer` (observation start, reachable via an overridden `more()` — which WildFly's
+`ApplicationRegistry` actually does, with a custom `ApplicationMore` overriding
+`longTaskTimer(String, Iterable<Tag>)`) carried `KeyValues` from micrometer itself; both are
+wrapped in the converting view by the mitigation. `counter` via `onEvent` goes through
 `Counter.builder` and never hits the virtual convenience method.
 
 **Affected population is real.** A GitHub code search for the exact override signature
