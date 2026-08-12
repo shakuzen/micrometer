@@ -483,6 +483,30 @@ Reading:
   5-key-value convention benchmark in `DefaultMeterObservationHandlerBenchmark`) is the recommended
   confirmation before merging anything.
 
+## Valhalla readiness note
+
+`Tag`/`KeyValue` implementations, `Meter.Id`, and `Tags`/`KeyValues` are candidates for Project
+Valhalla value classes (JEP 401) down the road. How this branch interacts with that:
+
+- **Helps.** The commit-1 equality contract (value-based `equals`/`hashCode` across all
+  implementations, no identity reliance) is exactly the semantics value classes formalize.
+  Commit 6 (no view caching) is load-bearing here: the commit-4 variant's lazily written cache
+  field was a *mutable* field and would have disqualified `Meter.Id` from value-class migration;
+  with it removed, every `Meter.Id` field is final and the class is value-ready. `KeyValuesTagIterable`
+  (one final field, no identity use) is itself a value-class candidate, so the +16 B mitigation
+  wrapper and the +8 B transient lookup-`Id` cost both trend toward zero under value-class
+  scalarization/flattening — Valhalla strengthens rather than undercuts this design.
+- **Neutral.** `Meter.Id` referencing a `KeyValue[]` is fine for a value class (arrays stay identity
+  objects; the array reference is just a field). The `instanceof` fast paths (`Tags`,
+  `KeyValuesTagIterable`) work unchanged on value objects.
+- **Pre-existing blockers, untouched by this branch.** `ImmutableTag` is a public **non-final**
+  class (third parties may subclass), and value classes must be final — that needs a deprecation
+  cycle regardless of this work. `Tags`/`KeyValues` use identity singleton checks
+  (`tags == EMPTY`, already flagged by ErrorProne `ReferenceEquality`) whose semantics shift subtly
+  under value-object `==`; switching them to `length == 0` checks at migration time is trivial.
+  Nothing holds `Tag`/`Id` in weak references, synchronizes on them, or uses identity hashing, so no
+  other disqualifiers were found in core.
+
 ## Open questions for the maintainer team
 
 1. **The CCE dispatch hazard (Edge 1)** — mitigated via the `KeyValuesTagIterable` converting view
