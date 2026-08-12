@@ -20,6 +20,7 @@ import io.micrometer.common.KeyValues;
 import io.micrometer.core.annotation.Incubating;
 import io.micrometer.core.instrument.config.NamingConvention;
 import io.micrometer.core.instrument.distribution.HistogramGauges;
+import io.micrometer.core.instrument.internal.KeyValuesTagIterable;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -249,6 +250,10 @@ public interface Meter {
          */
         static Id of(String name, Iterable<? extends KeyValue> keyValues, @Nullable String baseUnit,
                 @Nullable String description, Type type) {
+            if (keyValues instanceof KeyValuesTagIterable) {
+                // unwrap the converting view; the conversion never runs on this path
+                return of(name, ((KeyValuesTagIterable) keyValues).getKeyValues(), baseUnit, description, type);
+            }
             if (keyValues instanceof Tags) {
                 return new Id(name, (Tags) keyValues, baseUnit, description, type);
             }

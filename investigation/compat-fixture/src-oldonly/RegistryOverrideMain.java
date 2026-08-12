@@ -31,9 +31,10 @@ public class RegistryOverrideMain {
 
         // --- 2. observation-driven registration through the old-compiled iterating override.
         // Old jars: the handler converts KeyValues to List<Tag> first -> no problem.
-        // New jars: the handler passes KeyValues through timer(String, Iterable); the
-        // old-compiled override's loop checkcasts each element to Tag -> expect
-        // ClassCastException (heap pollution through the widened virtual call).
+        // New jars: the handler passes a lazily converting Iterable<Tag> view of the
+        // KeyValues through timer(String, Iterable); the old-compiled override's loop
+        // checkcasts each element to Tag, which succeeds because the view converts
+        // per element. (Without the view, this threw ClassCastException.)
         MyRegistry observedRegistry = new MyRegistry();
         ObservationRegistry observationRegistry = ObservationRegistry.create();
         observationRegistry.observationConfig()
@@ -49,13 +50,10 @@ public class RegistryOverrideMain {
             cce = true;
             System.out.println("INFO: ClassCastException: " + e.getMessage());
         }
-        if (newJars) {
-            check("DISPATCH HAZARD: observation through old-compiled iterating override throws CCE on new jars", cce);
-        }
-        else {
-            check("observation through old-compiled iterating override works on old jars",
-                    !cce && observedRegistry.overrideCalled);
-        }
+        check("observation through old-compiled iterating override works (jars=" + jars + ")",
+                !cce && observedRegistry.overrideCalled);
+        // the timer at stop carries keys "abc" (3 chars) and "error" (5 chars)
+        check("override observed the converted Tag elements", observedRegistry.keyCharsSeen == 8);
 
         System.out.println(failures == 0 ? "ALL CHECKS PASSED (jars=" + jars + ")"
                 : failures + " CHECKS FAILED (jars=" + jars + ")");

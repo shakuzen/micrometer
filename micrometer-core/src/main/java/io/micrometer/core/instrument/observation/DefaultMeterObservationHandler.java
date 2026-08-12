@@ -18,6 +18,7 @@ package io.micrometer.core.instrument.observation;
 import io.micrometer.common.KeyValue;
 import io.micrometer.common.KeyValues;
 import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.internal.KeyValuesTagIterable;
 import io.micrometer.observation.Observation;
 
 import java.util.Arrays;
@@ -70,8 +71,13 @@ public class DefaultMeterObservationHandler implements MeterObservationHandler<O
     @Override
     public void onStart(Observation.Context context) {
         if (shouldCreateLongTaskTimer) {
+            // The KeyValuesTagIterable view keeps registry subclasses that override
+            // longTaskTimer(String, Iterable) and iterate the elements as Tags working
+            // when compiled against versions declaring the parameter as Iterable<Tag>;
+            // the registry unwraps it without converting when no override intervenes.
             LongTaskTimer.Sample longTaskSample = meterRegistry.more()
-                .longTaskTimer(context.getName() + ".active", context.getLowCardinalityKeyValues())
+                .longTaskTimer(context.getName() + ".active",
+                        new KeyValuesTagIterable(context.getLowCardinalityKeyValues()))
                 .start();
             context.put(LongTaskTimer.Sample.class, longTaskSample);
         }
@@ -86,7 +92,8 @@ public class DefaultMeterObservationHandler implements MeterObservationHandler<O
     public void onStop(Observation.Context context) {
         KeyValues keyValues = context.getLowCardinalityKeyValues().and(KeyValue.of("error", getErrorValue(context)));
         Timer.Sample sample = context.getRequired(Timer.Sample.class);
-        sample.stop(this.meterRegistry.timer(context.getName(), keyValues));
+        // see the comment on the KeyValuesTagIterable use in onStart
+        sample.stop(this.meterRegistry.timer(context.getName(), new KeyValuesTagIterable(keyValues)));
 
         if (shouldCreateLongTaskTimer) {
             LongTaskTimer.Sample longTaskSample = context.getRequired(LongTaskTimer.Sample.class);
