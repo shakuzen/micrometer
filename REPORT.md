@@ -42,11 +42,14 @@ maintainer decision is one deprecation wart and a small residual risk for new us
   call-site pattern surveyed still compile. Exactly three patterns break, all niche (see the
   exact-errors section): subclass overrides of the widened methods (name clash), `Comparable<Tag>`-typed
   code, and strict `T extends Comparable<T>` bounds.
-- **Performance:** the target observation lifecycle improves by **≈ −20 % time** in all configurations
-  and **≈ −15…19 % allocation** with the long-task timer enabled (2,308 → ~1,860 B/op vs current main;
-  2,348 → ~1,860 B/op vs 1.16.2). The KeyValue→Tag conversion is gone from the per-observation path;
-  what remains is dominated by the Observation machinery itself (context, convention invocation ×2,
-  scope ThreadLocals), which caps the achievable win for the no-LTT case at roughly −10 % allocation.
+- **Performance (final branch state, multi-run):** the 5-key-value observation lifecycle improves by
+  **−25…26 % time single-threaded** (969 → 731 ns with LTT; 616 → 456 ns without) and **−19 %
+  allocation with LTT** (2,308 → 1,876 B/op; the no-LTT allocation delta is only ~−2.5 % and noisy).
+  The repo JMH benchmarks (1 key-value) confirm: **−11 % time / −112 B** single-threaded, but only
+  −1.5 % time (−131 B) at 4 contended threads. In absolute terms the win is ~45–240 ns and
+  ~110–430 B per observation depending on key-value count; the KeyValue→Tag conversion is gone, and
+  what remains is the Observation machinery itself (context, convention invocation ×2, scope
+  ThreadLocals), which was always the dominant term.
   Conversion provably moved to publish time: `getTagsAsIterable()` on a KeyValues-built id costs
   ~24–31 ns / 184 B per call (the view is computed per call since commit 6 removed the cache; with
   caching it was ~8 ns / 0 B after the first call — see the caching subsection). Confirmed
@@ -372,8 +375,13 @@ jar set because escape-analysis/JIT ordering causes ±(50–100) B/op run-to-run
 
 | scenario | 1.16.2 | main (before) | prototype (after) | after vs main |
 |---|---|---|---|---|
-| (a) handler with LTT | 2,348 B/op / 963 ns | 2,164–2,308 B/op / ~895–918 ns | **1,844–1,892 B/op / ~717–731 ns** | **−15…−19 % alloc, −21 % time** |
-| (b) handler LTT disabled | 1,880 B/op / 629 ns | 1,576–1,696 B/op / ~575–601 ns | **1,496–1,688 B/op / ~441–475 ns** | **−5…−12 % alloc, −23 % time** |
+| (a) handler with LTT | 2,348 B/op / 963 ns | 2,164–2,308 B/op / ~947–1,036 ns (median 2,308 / 969) | **1,876 B/op (stable ×5) / ~709–746 ns (median 731)** | **−19 % alloc, −25 % time** |
+| (b) handler LTT disabled | 1,880 B/op / 629 ns | 1,576–1,696 B/op / ~589–621 ns (median 1,600 / 616) | **1,512–1,704 B/op / ~443–523 ns (median 1,560 / 456)** | **−2.5 % alloc (noisy), −26 % time** |
+
+(The lifecycle rows are medians over 3–5 JVMs per side, measured at the final branch state
+including commits 6–7; the no-LTT allocation delta is small and within the EA-variance band — at
+this configuration the stop-path savings are largely offset by the `KeyValues.and` merge and the
+mitigation wrapper, while the time win remains large.)
 | cached `Timer.Sample` start/stop (reference) | 0 B/op / 52 ns | 0 B/op / 51 ns | 0 B/op / 53 ns | unchanged (the ~24 B `Sample` is escape-analyzed away in this loop) |
 
 Reading: the eliminated work is exactly the per-element conversion + `Tags`/`Meter.Id`
@@ -457,8 +465,8 @@ with `-f 3` and `-t 1`). Headline rows (annotation-default thread counts):
 
 | benchmark | before | after | delta |
 |---|---|---|---|
-| `DefaultMeterObservationHandlerBenchmark.observation` (4 threads, 1 key-value) | 1,021.6 ns / 1,310 B | 976.4 ns / 1,199 B | −4.4 % ns, **−111 B** |
-| `…observationWithoutThreadContention` (1 thread, 1 key-value) | 405.0 ns / 1,284 B | 388.9 ns / 1,172 B | −4.0 % ns, **−112 B** |
+| `DefaultMeterObservationHandlerBenchmark.observation` (4 threads, 1 key-value; re-verified `-f 3`) | 1,094.1 ns / 1,321 B | 1,078.1 ns / 1,191 B | −1.5 % ns (contention-dominated), **−131 B** |
+| `…observationWithoutThreadContention` (1 thread, 1 key-value; re-verified `-f 3`) | 407.5 ns / 1,300 B | 362.8 ns / 1,188 B | **−11.0 % ns, −112 B** |
 | `…builtTimerWithSample` / `…observationOrTimer` / `…builtTimerAndLongTaskTimer` | — | — | +8…19 B (larger `Meter.Id`), ns within noise |
 | `MeterRegistrationBenchmark.registerExistingTimer` (re-verified `-f 3 -t 1`) | 16.0 ns / 40 B | 16.8 ns / 48 B | **+0.8 ns, +8 B** |
 | `MeterRegistrationBenchmark.registerExistingCounter` (re-verified `-f 3 -t 1`) | 19.6 ns / 40 B | 19.9 ns / 48 B | +0.4 ns, +8 B |
