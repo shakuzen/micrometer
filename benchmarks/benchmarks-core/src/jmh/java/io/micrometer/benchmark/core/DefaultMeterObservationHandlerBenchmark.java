@@ -15,6 +15,7 @@
  */
 package io.micrometer.benchmark.core;
 
+import io.micrometer.common.KeyValues;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -22,6 +23,7 @@ import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler;
 import io.micrometer.core.instrument.observation.ObservationOrTimerCompatibleInstrumentation;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationConvention;
 import io.micrometer.observation.ObservationRegistry;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.profile.GCProfiler;
@@ -40,9 +42,35 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class DefaultMeterObservationHandlerBenchmark {
 
+    /**
+     * An http.server.requests-style convention producing 5 low-cardinality key-values,
+     * matching the shape of typical framework instrumentation (as opposed to the single
+     * key-value the other observation benchmarks use).
+     */
+    static final ObservationConvention<Observation.Context> CONVENTION = new ObservationConvention<Observation.Context>() {
+
+        @Override
+        public boolean supportsContext(Observation.Context context) {
+            return true;
+        }
+
+        @Override
+        public String getName() {
+            return "http.server.requests";
+        }
+
+        @Override
+        public KeyValues getLowCardinalityKeyValues(Observation.Context context) {
+            return KeyValues.of("exception", "none", "method", "GET", "outcome", "SUCCESS", "status", "200", "uri",
+                    "/api/users/{id}");
+        }
+    };
+
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     ObservationRegistry observationRegistry;
+
+    ObservationRegistry observationRegistryWithoutLongTaskTimer;
 
     ObservationRegistry noopRegistry;
 
@@ -54,6 +82,10 @@ public class DefaultMeterObservationHandlerBenchmark {
         this.observationRegistry = ObservationRegistry.create();
         this.observationRegistry.observationConfig()
             .observationHandler(new DefaultMeterObservationHandler(meterRegistry));
+        this.observationRegistryWithoutLongTaskTimer = ObservationRegistry.create();
+        this.observationRegistryWithoutLongTaskTimer.observationConfig()
+            .observationHandler(new DefaultMeterObservationHandler(meterRegistry,
+                    DefaultMeterObservationHandler.IgnoredMeters.LONG_TASK_TIMER));
         this.noopRegistry = ObservationRegistry.create();
     }
 
@@ -119,6 +151,44 @@ public class DefaultMeterObservationHandlerBenchmark {
         Observation observation = Observation.createNotStarted("test.obs", observationRegistry)
             .lowCardinalityKeyValue("abc", "123")
             .start();
+        observation.stop();
+
+        return observation;
+    }
+
+    @Benchmark
+    public Observation observationWithConvention() {
+        Observation observation = Observation
+            .createNotStarted(CONVENTION, Observation.Context::new, observationRegistry)
+            .start();
+        Observation.Scope scope = observation.openScope();
+        scope.close();
+        observation.stop();
+
+        return observation;
+    }
+
+    @Threads(1)
+    @Benchmark
+    public Observation observationWithConventionWithoutThreadContention() {
+        Observation observation = Observation
+            .createNotStarted(CONVENTION, Observation.Context::new, observationRegistry)
+            .start();
+        Observation.Scope scope = observation.openScope();
+        scope.close();
+        observation.stop();
+
+        return observation;
+    }
+
+    @Threads(1)
+    @Benchmark
+    public Observation observationWithConventionWithoutLongTaskTimer() {
+        Observation observation = Observation
+            .createNotStarted(CONVENTION, Observation.Context::new, observationRegistryWithoutLongTaskTimer)
+            .start();
+        Observation.Scope scope = observation.openScope();
+        scope.close();
         observation.stop();
 
         return observation;
