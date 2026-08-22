@@ -19,9 +19,7 @@ import io.micrometer.core.annotation.Incubating;
 import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
 
@@ -45,6 +43,8 @@ public class MultiGauge {
     private final Meter.Id commonId;
 
     private final Map<Meter.Id, RowState> registeredRows = new HashMap<>();
+
+    private long registrationCount;
 
     private MultiGauge(MeterRegistry registry, Meter.Id commonId) {
         this.registry = registry;
@@ -82,29 +82,29 @@ public class MultiGauge {
      */
     public void register(Iterable<? extends Row<?>> rows, boolean overwrite) {
         synchronized (registeredRows) {
-            Set<Meter.Id> newRowIds = new HashSet<>();
+            long currentRegistration = ++registrationCount;
 
             for (Row<?> row : rows) {
                 Meter.Id preFilteredId = commonId.withTags(row.uniqueTags);
                 Meter.Id rowId = registry.getMappedId(preFilteredId);
-                newRowIds.add(rowId);
 
                 RowState existingState = registeredRows.get(rowId);
                 if (existingState != null) {
+                    existingState.lastRegistration = currentRegistration;
                     if (overwrite) {
                         existingState.setRow(row);
                     }
                 }
                 else {
-                    RowState newState = new RowState(row);
+                    RowState newState = new RowState(row, currentRegistration);
                     registry.gauge(preFilteredId, newState, RowState::value);
                     registeredRows.put(rowId, newState);
                 }
             }
 
-            registeredRows.keySet().removeIf(id -> {
-                if (!newRowIds.contains(id)) {
-                    registry.remove(id);
+            registeredRows.entrySet().removeIf(entry -> {
+                if (entry.getValue().lastRegistration != currentRegistration) {
+                    registry.remove(entry.getKey());
                     return true;
                 }
                 return false;
@@ -116,8 +116,11 @@ public class MultiGauge {
 
         private volatile Row<?> row;
 
-        RowState(Row<?> row) {
+        private long lastRegistration;
+
+        RowState(Row<?> row, long lastRegistration) {
             this.row = row;
+            this.lastRegistration = lastRegistration;
         }
 
         void setRow(Row<?> row) {
