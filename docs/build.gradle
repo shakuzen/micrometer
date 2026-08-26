@@ -125,3 +125,7 @@ downloadBaseline {
 japicmp {
     enabled = false
 }
+
+testModules {
+    enabled = false
+}
