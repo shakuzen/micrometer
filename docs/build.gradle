@@ -125,3 +125,7 @@ downloadBaseline {
 japicmp {
     enabled = false
 }
+
+tasks.named('testModules') {
+    enabled = false
+}
