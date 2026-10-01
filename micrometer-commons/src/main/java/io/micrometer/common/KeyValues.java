@@ -234,7 +234,15 @@ public final class KeyValues implements Iterable<KeyValue> {
      * @return a new {@code KeyValues} instance
      */
     public KeyValues and(@Nullable Iterable<? extends KeyValue> keyValues) {
-        if (keyValues == null || keyValues == EMPTY || !keyValues.iterator().hasNext()) {
+        if (keyValues == null || keyValues == EMPTY) {
+            return this;
+        }
+        if (keyValues instanceof Collection) {
+            if (((Collection<?>) keyValues).isEmpty()) {
+                return this;
+            }
+        }
+        else if (!keyValues.iterator().hasNext()) {
             return this;
         }
 
@@ -359,7 +367,7 @@ public final class KeyValues implements Iterable<KeyValue> {
      * @return a new {@code KeyValues} instance
      */
     public static KeyValues of(@Nullable Iterable<? extends KeyValue> keyValues) {
-        if (keyValues == null || keyValues == EMPTY || !keyValues.iterator().hasNext()) {
+        if (keyValues == null || keyValues == EMPTY) {
             return KeyValues.empty();
         }
         else if (keyValues instanceof KeyValues) {
@@ -367,7 +375,17 @@ public final class KeyValues implements Iterable<KeyValue> {
         }
         else if (keyValues instanceof Collection) {
             Collection<? extends KeyValue> keyValuesCollection = (Collection<? extends KeyValue>) keyValues;
+            int size = keyValuesCollection.size();
+            if (size == 0) {
+                return KeyValues.empty();
+            }
+            if (size == 1) {
+                return new KeyValues(new KeyValue[] { keyValuesCollection.iterator().next() }, 1);
+            }
             return toKeyValues(keyValuesCollection.toArray(EMPTY_KEY_VALUE_ARRAY));
+        }
+        else if (!keyValues.iterator().hasNext()) {
+            return KeyValues.empty();
         }
         else {
             return toKeyValues(StreamSupport.stream(keyValues.spliterator(), false).toArray(KeyValue[]::new));

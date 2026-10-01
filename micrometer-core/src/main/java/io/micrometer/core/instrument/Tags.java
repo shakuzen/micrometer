@@ -210,7 +210,15 @@ public final class Tags implements Iterable<Tag> {
      * @return a new {@code Tags} instance
      */
     public Tags and(@Nullable Iterable<? extends Tag> tags) {
-        if (tags == null || tags == EMPTY || !tags.iterator().hasNext()) {
+        if (tags == null || tags == EMPTY) {
+            return this;
+        }
+        if (tags instanceof Collection) {
+            if (((Collection<?>) tags).isEmpty()) {
+                return this;
+            }
+        }
+        else if (!tags.iterator().hasNext()) {
             return this;
         }
 
@@ -327,7 +335,7 @@ public final class Tags implements Iterable<Tag> {
      * @return a new {@code Tags} instance
      */
     public static Tags of(@Nullable Iterable<? extends Tag> tags) {
-        if (tags == null || tags == EMPTY || !tags.iterator().hasNext()) {
+        if (tags == null || tags == EMPTY) {
             return Tags.empty();
         }
         else if (tags instanceof Tags) {
@@ -335,7 +343,17 @@ public final class Tags implements Iterable<Tag> {
         }
         else if (tags instanceof Collection) {
             Collection<? extends Tag> tagsCollection = (Collection<? extends Tag>) tags;
+            int size = tagsCollection.size();
+            if (size == 0) {
+                return Tags.empty();
+            }
+            if (size == 1) {
+                return new Tags(new Tag[] { tagsCollection.iterator().next() }, 1);
+            }
             return toTags(tagsCollection.toArray(EMPTY_TAG_ARRAY));
+        }
+        else if (!tags.iterator().hasNext()) {
+            return Tags.empty();
         }
         else {
             return toTags(StreamSupport.stream(tags.spliterator(), false).toArray(Tag[]::new));
