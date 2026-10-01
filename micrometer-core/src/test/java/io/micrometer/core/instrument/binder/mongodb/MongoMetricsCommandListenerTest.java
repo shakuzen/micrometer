@@ -158,7 +158,7 @@ class MongoMetricsCommandListenerTest extends AbstractMongoDbTest {
             Map<String, Thread> commandThreadMap = new HashMap<>();
 
             commandThreadMap.put("insert",
-                    new Thread(() -> requireNonNull(mongo).getDatabase("test")
+                    new Thread(() -> mongo.getDatabase("test")
                         .getCollection("testCol")
                         .insertOne(new Document("testField", new Date()))));
 
